@@ -1,0 +1,10 @@
+name = "LiebRobinson"
+defaultTargets = ["LiebRobinson"]
+
+[[require]]
+name = "Physlib"
+git = "https://github.com/leanprover-community/physlib.git"
+rev = "3bfc7af8dbd43b439d761e09ce365a3759b5c2f5"
+
+[[lean_lib]]
+name = "LiebRobinson"
