@@ -1,0 +1,310 @@
+% Compile with: latexmk -pdf main
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{newunicodechar}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{booktabs}
+
+% Unicode characters appearing in Lean code
+\newunicodechar{‖}{\ensuremath{\|}}
+\newunicodechar{•}{\ensuremath{\bullet}}
+\newunicodechar{₀}{\ensuremath{{}_0}}
+\newunicodechar{₃}{\ensuremath{{}_3}}
+\newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}
+\newunicodechar{→}{\ensuremath{\to}}
+\newunicodechar{↔}{\ensuremath{\leftrightarrow}}
+\newunicodechar{∀}{\ensuremath{\forall}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{⟪}{\ensuremath{\langle\!\langle}}
+\newunicodechar{⟫}{\ensuremath{\rangle\!\rangle}}
+\newunicodechar{⨯}{\ensuremath{\times}}
+
+\DefineVerbatimEnvironment{lean}{Verbatim}{fontsize=\small,frame=leftline,framerule=0.6pt,
+  rulecolor=\color{gray!60},xleftmargin=1em}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\vA}{\mathbf{A}}
+\newcommand{\vL}{\mathbf{L}}
+\newcommand{\vp}{\mathbf{p}}
+\newcommand{\vq}{\mathbf{q}}
+\newcommand{\ip}[2]{\langle #1, #2\rangle}
+
+\title{A Formal Proof of the Conservation of the\\ Laplace--Runge--Lenz Vector and Kepler's First Law\\ in Lean~4}
+\author{Nichlas Lofdahl \and Claude (Anthropic)\thanks{AI system (model Claude Opus 5.5), developed by Anthropic.
+Claude wrote the Lean proofs and drafted this manuscript in collaboration with the first author.}}
+\date{October 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\begin{abstract}
+We present a machine-checked formalization, in the Lean~4 proof assistant on top of the Physlib
+library, of the classical Kepler problem: a particle in the inverse-square potential
+$V(r)=-k/r$. We define the Laplace--Runge--Lenz (LRL) vector on phase space and prove that its
+Poisson bracket with the Hamiltonian vanishes away from the centre of force. We prove the
+algebraic identities $\ip{\vA}{\vL}=0$, $\ip{\vA}{\vq}=\|\vL\|^2-mk\|\vq\|$ and
+$\|\vA\|^2=(mk)^2+2mH\|\vL\|^2$, and derive that bound orbits ($H<0$) have eccentricity less than
+one. Finally, we lift these phase-space statements to trajectories: along every differentiable
+solution of Hamilton's equations avoiding the origin, the LRL vector and $\|\vL\|^2$ are constant,
+so the position satisfies the polar equation of a conic with a focus at the centre of force
+(Kepler's first law). The development is about 300 lines, uses no axioms beyond Lean's standard
+three, and passes all of Physlib's contribution linters.
+\end{abstract}
+
+\section{Introduction}
+
+Formal verification of physics has gained momentum with the growth of Lean's
+mathematical library Mathlib~\cite{mathlib2020} and the physics library
+Physlib (formerly HepLean/PhysLean)~\cite{toobysmith2024heplean}. Physlib now contains, among much else,
+a quantum-mechanical treatment of the hydrogen atom including commutation relations of the
+quantum LRL operator, and, as of October~2026, basic infrastructure for classical central-force
+problems: the Hamiltonian $H(\vp,\vq)=\ip{\vp}{\vp}/2m+V(\|\vq\|)$, its gradients, and the
+conservation of angular momentum in Poisson-bracket form.
+
+What was missing is the defining classical result of the Kepler problem: the existence of the
+additional conserved vector $\vA$ that explains why Kepler orbits close, and the derivation of
+the conic orbit equation from it. Before starting we searched Physlib's sources, its open
+pull requests and issues, and the web; we are not aware of an existing formalization of the
+classical LRL vector or of the conic orbit theorem in Lean. This note fills that gap.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item A definition of the Kepler problem as an instance of Physlib's \texttt{CentralForce}
+  structure, and of the LRL vector as a function on phase space (\S\ref{sec:defs}).
+  \item Algebraic identities: the triple-product expansion of $\vA$, orthogonality to $\vL$, the
+  orbit equation, the norm identity, and the eccentricity--energy criterion (\S\ref{sec:algebra}).
+  \item Conservation: explicit phase-space gradients of each component of $\vA$ and the
+  vanishing of $\{A_i,H\}$ (\S\ref{sec:conservation}).
+  \item Trajectory results: a general lemma that a Poisson-commuting observable is constant along
+  solutions of Hamilton's equations, and Kepler's first law (\S\ref{sec:trajectory}).
+\end{itemize}
+
+The source is available at \url{https://github.com/Crotalus/kepler-lrl-lean}; it builds against
+Physlib commit \texttt{3bfc7af} with Lean~\texttt{v4.35.0}.
+
+\section{Mathematical background}\label{sec:background}
+
+Consider a particle of mass $m>0$ at position $\vq\in\mathbb{R}^3$ with momentum $\vp$ in the
+potential $V(r)=-k/r$, with Hamiltonian
+\[
+  H(\vp,\vq)=\frac{\ip{\vp}{\vp}}{2m}-\frac{k}{\|\vq\|}.
+\]
+The angular momentum is $\vL=\vq\times\vp$ and the Laplace--Runge--Lenz vector is
+\[
+  \vA=\vp\times\vL-\frac{mk}{\|\vq\|}\,\vq
+     =\ip{\vp}{\vp}\,\vq-\ip{\vq}{\vp}\,\vp-\frac{mk}{\|\vq\|}\,\vq ,
+\]
+where the second form uses $\mathbf a\times(\mathbf b\times\mathbf c)
+=\ip{\mathbf a}{\mathbf c}\mathbf b-\ip{\mathbf a}{\mathbf b}\mathbf c$
+\cite[\S3.9]{goldstein}. Taking the inner product with $\vq$ and using Lagrange's identity
+$\|\vL\|^2=\ip{\vq}{\vq}\ip{\vp}{\vp}-\ip{\vq}{\vp}^2$ gives
+\begin{equation}\label{eq:orbit}
+  \ip{\vA}{\vq}=\|\vL\|^2-mk\|\vq\| .
+\end{equation}
+If $\vA$ and $\vL$ are constants of motion and $\theta$ denotes the angle between $\vA$ and
+$\vq$, \eqref{eq:orbit} reads $\|\vq\|(mk+\|\vA\|\cos\theta)=\|\vL\|^2$, that is
+$\|\vq\|=\frac{\|\vL\|^2/mk}{1+e\cos\theta}$ with eccentricity $e=\|\vA\|/mk$: a conic with
+focus at the origin. A direct expansion also gives
+\begin{equation}\label{eq:norm}
+  \|\vA\|^2=(mk)^2+2mH\|\vL\|^2 ,
+\end{equation}
+so for $k>0$ and $\vL\neq0$, $e<1$ if and only if $H<0$. Elementary derivations of these facts
+can be found in~\cite{goldstein,moriconi2021}.
+
+\section{Formalization}
+
+\subsection{Setting and conventions}\label{sec:defs}
+
+Physlib models phase space for a particle in three dimensions as pairs
+$(\vp,\vq)$ of elements of \texttt{EuclideanSpace ℝ (Fin 3)}, and observables as curried functions
+\texttt{p → q → ℝ}. The Poisson bracket is
+\[
+  \{f,g\}=\ip{\nabla_{\vq}f}{\nabla_{\vp}g}-\ip{\nabla_{\vp}f}{\nabla_{\vq}g},
+\]
+and a central-force system is a structure carrying a mass $m>0$ and a potential
+\texttt{V : ℝ → ℝ} smooth on $(0,\infty)$. We follow these conventions exactly so that the
+development can be contributed upstream. The Kepler problem and the LRL vector are:
+
+\begin{lean}
+noncomputable def kepler (m k : ℝ) (hm : 0 < m) : CentralForce where
+  m := m
+  V := fun r => -k / r
+  m_pos := hm
+  contDiffOn_V := contDiffOn_const.div contDiffOn_id
+    fun _ hr => (Set.mem_Ioi.mp hr).ne'
+
+noncomputable def lrlVector (m k : ℝ) (p q : EuclideanSpace ℝ (Fin 3)) :
+    EuclideanSpace ℝ (Fin 3) :=
+  WithLp.toLp 2 (p.ofLp ⨯₃ (angularMomentum p q).ofLp) - (m * k / ‖q‖) • q
+\end{lean}
+
+The definition of \texttt{lrlVector} mirrors the textbook formula $\vp\times\vL-(mk/\|\vq\|)\vq$,
+reusing Physlib's \texttt{angularMomentum} and Mathlib's cross product on \texttt{Fin 3 → ℝ}. The
+\texttt{toLp}/\texttt{ofLp} coercions are needed because the cross product lives on the plain
+function type, whereas norms and inner products live on \texttt{EuclideanSpace}.
+
+\begin{remark}
+Lean's convention $x/0=0$ makes \texttt{lrlVector} total. A consequence we exploited is that the
+orbit equation \eqref{eq:orbit} holds \emph{without} the hypothesis $\vq\neq0$: at $\vq=0$ both
+sides vanish. In contrast, \eqref{eq:norm} genuinely requires $\vq\ne0$.
+\end{remark}
+
+\subsection{Algebraic identities}\label{sec:algebra}
+
+\begin{lean}
+lemma lrlVector_eq (m k : ℝ) (p q : EuclideanSpace ℝ (Fin 3)) :
+    lrlVector m k p q = ⟪p, p⟫_ℝ • q - ⟪q, p⟫_ℝ • p - (m * k / ‖q‖) • q
+
+lemma inner_lrlVector_angularMomentum (m k : ℝ) (p q : EuclideanSpace ℝ (Fin 3)) :
+    ⟪lrlVector m k p q, angularMomentum p q⟫_ℝ = 0
+
+lemma inner_lrlVector_position (m k : ℝ) (p q : EuclideanSpace ℝ (Fin 3)) :
+    ⟪lrlVector m k p q, q⟫_ℝ = angularMomentumSq p q - m * k * ‖q‖
+
+lemma norm_lrlVector_sq (m k : ℝ) (hm : 0 < m) (p : EuclideanSpace ℝ (Fin 3))
+    {q : EuclideanSpace ℝ (Fin 3)} (hq : q ≠ 0) :
+    ‖lrlVector m k p q‖ ^ 2 =
+      (m * k) ^ 2 + 2 * m * (kepler m k hm).hamiltonian p q * angularMomentumSq p q
+
+lemma norm_lrlVector_lt_iff (m k : ℝ) (hm : 0 < m) (hk : 0 < k)
+    (p : EuclideanSpace ℝ (Fin 3)) {q : EuclideanSpace ℝ (Fin 3)} (hq : q ≠ 0)
+    (hL : angularMomentumSq p q ≠ 0) :
+    ‖lrlVector m k p q‖ < m * k ↔ (kepler m k hm).hamiltonian p q < 0
+\end{lean}
+
+The triple-product expansion and the orthogonality to $\vL$ are proved componentwise: after
+\texttt{ext i; fin\_cases i} the goals become polynomial identities in the six coordinates (with
+$mk/\|\vq\|$ as an opaque atom), closed by \texttt{simp} and \texttt{ring}. All later results are
+stated in terms of inner products and norms and use \texttt{lrlVector\_eq} to avoid coordinates.
+For \eqref{eq:norm} we expand $\ip{\vA}{\vA}$ bilinearly, rewrite with Physlib's Lagrange
+identity \texttt{angularMomentumSq\_eq}, clear the denominator $\|\vq\|$ with
+\texttt{field\_simp}, and close with \texttt{ring}. One subtlety: rewriting
+$\ip{x}{x}=\|x\|^2$ must happen \emph{after} bilinear expansion, otherwise it fires on
+$\ip{c\,\vq}{c\,\vq}$ and blocks the expansion. The eccentricity criterion follows from
+\eqref{eq:norm} by comparing squares of non-negative reals and a single \texttt{nlinarith} call
+with the hint $m\|\vL\|^2>0$.
+
+\subsection{Conservation of the LRL vector}\label{sec:conservation}
+
+For each component $A_i$ we compute the partial gradients explicitly:
+\begin{align*}
+  \nabla_{\vp}A_i &= 2q_i\,\vp-p_i\,\vq-\ip{\vq}{\vp}\,\mathbf e_i,\\
+  \nabla_{\vq}A_i &= \ip{\vp}{\vp}\,\mathbf e_i-p_i\,\vp-\frac{mk}{\|\vq\|}\,\mathbf e_i
+     +\frac{mk\,q_i}{\|\vq\|^3}\,\vq \qquad(\vq\neq0).
+\end{align*}
+In Lean these are \texttt{HasGradientAt} statements, assembled from Physlib's gradient calculus
+(\texttt{hasGradientAt\_inner\_self}, \texttt{hasGradientAt\_coord}, \texttt{hasGradientAt\_norm}
+and a chain rule \texttt{HasDerivAt.comp\_hasGradientAt}), followed by \texttt{module} or
+\texttt{field\_simp} to normalize the resulting linear combination. Using
+$V'(r)=k/r^2$ (lemma \texttt{kepler\_deriv\_V}) and Physlib's gradients of the Hamiltonian,
+$\nabla_{\vp}H=\vp/m$ and $\nabla_{\vq}H=(k/\|\vq\|^3)\,\vq$, the Poisson bracket evaluates to
+\[
+  \{A_i,H\}=-k\Big(\frac{p_i}{\|\vq\|}-\frac{q_i\ip{\vq}{\vp}}{\|\vq\|^3}\Big)
+  -\frac{k}{\|\vq\|^3}\big(q_i\ip{\vq}{\vp}-p_i\|\vq\|^2\big)=0 .
+\]
+
+\begin{lean}
+lemma poissonBracket_lrlVector_hamiltonian (m k : ℝ) (hm : 0 < m) (i : Fin 3)
+    (p : EuclideanSpace ℝ (Fin 3)) {q : EuclideanSpace ℝ (Fin 3)} (hq : q ≠ 0) :
+    poissonBracket (fun p' q' => lrlVector m k p' q' i)
+      (kepler m k hm).hamiltonian p q = 0
+\end{lean}
+
+The proof is eleven lines: rewrite the bracket via \texttt{poissonBracket\_eq\_of\_hasGradientAt}
+with the four gradients, expand inner products, and close with \texttt{field\_simp; ring}.
+
+\subsection{From phase space to trajectories}\label{sec:trajectory}
+
+A vanishing Poisson bracket is the infinitesimal statement of conservation. To obtain Kepler's
+first law we need the integrated statement along an actual motion. Physlib provides Hamilton's
+equations as \texttt{hamiltonEqOp H p q = 0} for curves \texttt{p q : Time → EuclideanSpace ℝ (Fin 3)},
+and the theorem \texttt{deriv\_comp\_eq\_poissonBracket} stating
+$\frac{d}{dt}f(\vp(t),\vq(t))=\{f,H\}(\vp(t),\vq(t))$ along solutions. We proved a general lemma:
+
+\begin{lean}
+lemma eq_of_poissonBracket_eq_zero {H f : E → E → ℝ} {p q : Time → E}
+    (heq : hamiltonEqOp (fun _ => H) p q = 0)
+    (hp : Differentiable ℝ p) (hq : Differentiable ℝ q)
+    (hf : ∀ t, DifferentiableAt ℝ (Function.uncurry f) (p t, q t))
+    (hpb : ∀ t, poissonBracket f H (p t) (q t) = 0) (t s : Time) :
+    f (p t) (q t) = f (p s) (q s)
+\end{lean}
+(here \texttt{E} abbreviates \texttt{EuclideanSpace ℝ (Fin 3)}). Physlib's \texttt{Time} is a
+structure wrapping a real number rather than \texttt{ℝ} itself; the proof transports the
+derivative to $\mathbb{R}$ with the bridge lemma \texttt{hasDerivAt\_mk\_of\_differentiableAt}
+and applies Mathlib's \texttt{is\_const\_of\_deriv\_eq\_zero}. Together with differentiability of
+$A_i$ away from the origin and the existing conservation of $\|\vL\|^2$, this yields:
+
+\begin{theorem}[Kepler's first law]
+Let $(\vp(t),\vq(t))$ be a differentiable solution of Hamilton's equations for the Kepler
+Hamiltonian with $\vq(t)\neq0$ for all $t$. Then for all times $t_0,t$,
+\[
+  \ip{\vA(t_0)}{\vq(t)}=\|\vL(t_0)\|^2-mk\,\|\vq(t)\|.
+\]
+\end{theorem}
+
+\begin{lean}
+lemma inner_lrlVector_position_of_hamiltonEqOp (m k : ℝ) (hm : 0 < m)
+    {p q : Time → EuclideanSpace ℝ (Fin 3)}
+    (heq : hamiltonEqOp (fun _ => (kepler m k hm).hamiltonian) p q = 0)
+    (hp : Differentiable ℝ p) (hq : Differentiable ℝ q) (hq0 : ∀ t, q t ≠ 0)
+    (t₀ t : Time) :
+    ⟪lrlVector m k (p t₀) (q t₀), q t⟫_ℝ =
+      angularMomentumSq (p t₀) (q t₀) - m * k * ‖q t‖
+\end{lean}
+
+Combined with \texttt{norm\_lrlVector\_lt\_iff}, this shows that a bound Kepler motion with
+non-zero angular momentum traces an ellipse. Note that we assume, rather than construct, a
+solution of Hamilton's equations; existence and uniqueness of solutions are not needed for these
+statements and are not addressed.
+
+\section{Discussion}
+
+\paragraph{Size and checking.} The development consists of 2 definitions and 15 lemmas in about
+300 lines, including documentation. No proof exceeds a dozen lines. \texttt{\#print axioms} on the
+main results reports only \texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}. The
+file passes Physlib's module-documentation, alpha-library and style linters.
+
+\paragraph{What was easy.} Once the right normal form (\texttt{lrlVector\_eq}) was available, every
+identity of the Kepler problem reduced to \texttt{field\_simp} and \texttt{ring}. Physlib's
+existing gradient API and its Poisson-bracket lemma \texttt{poissonBracket\_eq\_of\_hasGradientAt}
+made the conservation proof essentially a transcription of the pen-and-paper computation.
+
+\paragraph{What required care.} The friction points were elaboration issues rather than
+mathematics: the higher-order unification of \texttt{DifferentiableAt.comp} and of the chain rule
+for gradients needed explicit named arguments; \texttt{fun\_prop} could not discharge
+differentiability of $\vq\mapsto q_i$ on \texttt{EuclideanSpace} without hand-supplied facts; and
+moving between \texttt{Time} and \texttt{ℝ} required Physlib's bridge lemmas.
+
+\paragraph{Future work.} Natural continuations are Kepler's second law (constant areal velocity,
+essentially the conservation of $\vL$ along trajectories), Kepler's third law relating the period
+to the semi-major axis, the hidden $SO(4)$ symmetry via the Poisson algebra of $\vL$ and
+$\vA/\sqrt{-2mH}$ (the classical counterpart of Physlib's quantum commutators), and Bertrand's
+theorem. For an upstream contribution to Physlib, the general lemma
+\texttt{eq\_of\_poissonBracket\_eq\_zero} should move to the Poisson-bracket module, and the work
+should be split into several smaller pull requests as required by the project's guidelines.
+
+\paragraph{Author contributions.} N.L.\ chose the problem, directed the work and reviewed the
+results. Claude, an AI system developed by Anthropic, surveyed the existing literature and
+libraries, designed the statements, wrote the Lean proofs and drafted the manuscript. All
+statements were checked by the Lean kernel. As an AI system cannot take responsibility for a
+publication, N.L.\ is accountable for its content.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
