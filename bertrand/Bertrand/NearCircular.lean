@@ -30,13 +30,16 @@ namespace Bertrand
 -/
 
 /-- At a single radius: if the orbits near the stable circular orbit of radius `r` are closed,
-then `√(U'') = √(3 + r V'' / V')` is rational. -/
-lemma sqrt_rat_of_closed {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 < a) (hab : a < b)
+then their apsidal angle is constant, equal to `π / √(U'')` with `U'' = 3 + r V'' / V'`, and this
+is a rational multiple of `π`. -/
+lemma apsidalAngle_const_of_closed {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 < a) (hab : a < b)
     (hV : ContDiffOn ℝ 3 V (Ioo a b)) (hr : r ∈ Ioo a b) (hV' : 0 < deriv V r)
     (hk : 0 < 3 + r * iteratedDeriv 2 V r / deriv V r)
     (hclosed : ∀ᶠ E in 𝓝[>] (circularEnergy V r),
       ∃ q : ℚ, orbitApsidalAngle V a b r E = q * π) :
-    ∃ q : ℚ, √(3 + r * iteratedDeriv 2 V r / deriv V r) = q := by
+    (∃ ε₂ > 0, ∀ ε ∈ Ioo 0 ε₂, orbitApsidalAngle V a b r (circularEnergy V r + ε) =
+      π / √(3 + r * iteratedDeriv 2 V r / deriv V r)) ∧
+      ∃ q : ℚ, π / √(3 + r * iteratedDeriv 2 V r / deriv V r) = q * π := by
   have hr0 : 0 < r := ha.trans hr.1
   have hb : 0 < b := ha.trans hab
   have hM : 0 < angMom V r := Real.sqrt_pos.mpr (by positivity)
@@ -76,19 +79,29 @@ lemma sqrt_rat_of_closed {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 < a) (hab : a <
     tendsto_const_nhds.congr' (eventually_nhdsWithin_of_forall fun ε hε => (hconst ε hε).symm)
   have := left_nhdsWithin_Ioo_neBot hε₂pos
   have hF0' : F 0 = F (ε₂ / 2) := tendsto_nhds_unique hlim hlim'
-  -- `F 0 = π / √(U'')`, hence `√(U'') = 1 / q`.
+  -- `F 0 = π / √(U'')`, so the apsidal angle is constant with that value.
   rw [hF0, hc, hU2] at hF0'
-  have hq0 : F (ε₂ / 2) = q * π := (div_eq_iff pi_ne_zero).mp hq
-  rw [hq0] at hF0'
+  refine ⟨⟨ε₂, hε₂pos, fun ε hε => ?_⟩, q, ?_⟩
+  · rw [show orbitApsidalAngle V a b r (circularEnergy V r + ε) = F ε from
+      hFeq ε ⟨hε.1, hε.2.trans_le (min_le_right _ _)⟩, hconst ε hε, ← hF0']
+    ring
+  · rw [show π / √(3 + r * iteratedDeriv 2 V r / deriv V r) = F (ε₂ / 2) by rw [← hF0']; ring]
+    exact (div_eq_iff pi_ne_zero).mp hq
+
+/-- At a single radius: if the orbits near the stable circular orbit of radius `r` are closed,
+then `√(U'') = √(3 + r V'' / V')` is rational. -/
+lemma sqrt_rat_of_closed {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 < a) (hab : a < b)
+    (hV : ContDiffOn ℝ 3 V (Ioo a b)) (hr : r ∈ Ioo a b) (hV' : 0 < deriv V r)
+    (hk : 0 < 3 + r * iteratedDeriv 2 V r / deriv V r)
+    (hclosed : ∀ᶠ E in 𝓝[>] (circularEnergy V r),
+      ∃ q : ℚ, orbitApsidalAngle V a b r E = q * π) :
+    ∃ q : ℚ, √(3 + r * iteratedDeriv 2 V r / deriv V r) = q := by
+  obtain ⟨-, q, hq⟩ := apsidalAngle_const_of_closed ha hab hV hr hV' hk hclosed
   have hs := Real.sqrt_pos.mpr hk
-  refine ⟨q⁻¹, ?_⟩
-  push_cast
-  have : 1 / √(3 + r * iteratedDeriv 2 V r / deriv V r) = q := by
-    have := pi_pos
-    field_simp at hF0' ⊢
-    linarith
-  rw [← this]
-  field_simp
+  rw [div_eq_iff hs.ne'] at hq
+  have h1 : √(3 + r * iteratedDeriv 2 V r / deriv V r) * q = 1 :=
+    mul_right_cancel₀ pi_ne_zero (by linear_combination -hq)
+  exact ⟨q⁻¹, by push_cast; exact eq_inv_of_mul_eq_one_left h1⟩
 
 /-- **Bertrand's theorem, part I.** Suppose that on the radii `(a, b)` every circular orbit is
 stable, and that every orbit close enough to a circular one is closed: its apsidal angle is a

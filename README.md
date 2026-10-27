@@ -11,7 +11,7 @@ Physlib/Mathlib versions), the Lean sources, and a short paper.
 |---|---|---|
 | [`kepler-lrl/`](kepler-lrl/) | Kepler problem: conservation of the Laplace–Runge–Lenz vector and Kepler's first law | Complete, no `sorry` · [paper](kepler-lrl/paper/main.pdf) |
 | [`earnshaw/`](earnshaw/) | Earnshaw's theorem: harmonic functions have no strict local extrema (no stable electrostatic equilibrium) | Complete, no `sorry` · [paper](earnshaw/paper/main.pdf) |
-| [`bertrand/`](bertrand/) | Bertrand's theorem, part I: closed near-circular orbits force a power-law force | Part I complete · [paper](bertrand/paper/main.pdf) · part II in progress |
+| [`bertrand/`](bertrand/) | Bertrand's theorem (local form): closed near-circular orbits ⇒ inverse-square or Hooke force | Complete, no `sorry` · [paper](bertrand/paper/main.pdf) |
 
 ## Building a problem
 

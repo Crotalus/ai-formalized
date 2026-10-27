@@ -59,7 +59,8 @@ lemma connectedComponentIn_eq (c : MorseChart U Ω x₀) {σ : ℝ} (hσ : 0 < �
     have hC := isPreconnected_connectedComponentIn (F := Ω ∩ {x | U x < U x₀ + σ ^ 2 / 2})
       (x := x₀)
     have hx₀ : x₀ ∈ connectedComponentIn (Ω ∩ {x | U x < U x₀ + σ ^ 2 / 2}) x₀ :=
-      mem_connectedComponentIn ⟨c.X_zero ▸ c.mapsTo h0, show U x₀ < U x₀ + σ ^ 2 / 2 by linarith [pow_pos hσ 2]⟩
+      mem_connectedComponentIn ⟨c.X_zero ▸ c.mapsTo h0,
+        show U x₀ < U x₀ + σ ^ 2 / 2 by linarith [pow_pos hσ 2]⟩
     -- the component is an interval around `x₀` avoiding `X (±σ)`
     have hlt : y < c.X σ := by
       by_contra! h

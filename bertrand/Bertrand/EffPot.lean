@@ -90,7 +90,8 @@ lemma iteratedDeriv_two_effPot_circular {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 
     exact ((hV1.differentiableOn (by norm_num)).differentiableAt
       (isOpen_Ioo.mem_nhds hy)).hasDerivAt
   -- Near `x₀`, the derivative of `U` is `x - M / x² V' (M / x)`.
-  have hcont : ContinuousAt (fun x : ℝ => M / x) x₀ := continuousAt_const.div continuousAt_id hx0.ne'
+  have hcont : ContinuousAt (fun x : ℝ => M / x) x₀ :=
+    continuousAt_const.div continuousAt_id hx0.ne'
   have hnhds : Ioo a b ∈ 𝓝 (M / x₀) := by
     rw [hMr]
     exact isOpen_Ioo.mem_nhds hr
@@ -119,10 +120,10 @@ lemma iteratedDeriv_two_effPot_circular {V : ℝ → ℝ} {a b r : ℝ} (ha : 0 
   field_simp
   linear_combination (-(2 * deriv V r + r * iteratedDeriv 2 V r)) * hM2
 
-/-- The effective potential is `C³` on the radii `(a, b)`. -/
-lemma contDiffOn_effPot {V : ℝ → ℝ} {a b M : ℝ} (ha : 0 < a) (hab : a < b) (hM : 0 < M)
-    (hV : ContDiffOn ℝ 3 V (Ioo a b)) :
-    ContDiffOn ℝ 3 (effPot V M) (Ioo (M / b) (M / a)) := by
+/-- The effective potential is as smooth as `V`, on the radii `(a, b)`. -/
+lemma contDiffOn_effPot {V : ℝ → ℝ} {a b M : ℝ} {n : WithTop ℕ∞} (ha : 0 < a) (hab : a < b)
+    (hM : 0 < M) (hV : ContDiffOn ℝ n V (Ioo a b)) :
+    ContDiffOn ℝ n (effPot V M) (Ioo (M / b) (M / a)) := by
   have hb : 0 < b := ha.trans hab
   have hpos : ∀ x ∈ Ioo (M / b) (M / a), 0 < x := fun x hx => (div_pos hM hb).trans hx.1
   have hmaps : MapsTo (fun x : ℝ => M / x) (Ioo (M / b) (M / a)) (Ioo a b) := fun x hx => by
@@ -130,7 +131,7 @@ lemma contDiffOn_effPot {V : ℝ → ℝ} {a b M : ℝ} (ha : 0 < a) (hab : a < 
     have h1 := (lt_div_iff₀ ha).mp hx.2
     have h2 := (div_lt_iff₀ hb).mp hx.1
     exact ⟨(lt_div_iff₀ hx0).mpr (by linarith), (div_lt_iff₀ hx0).mpr (by linarith)⟩
-  show ContDiffOn ℝ 3 (fun x => x ^ 2 / 2 + V (M / x)) _
+  show ContDiffOn ℝ n (fun x => x ^ 2 / 2 + V (M / x)) _
   exact ((contDiffOn_id.pow 2).div_const 2).add
     (hV.comp (contDiffOn_const.div contDiffOn_id fun x hx => (hpos x hx).ne') hmaps)
 

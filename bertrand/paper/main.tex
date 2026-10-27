@@ -34,6 +34,9 @@
 \newunicodechar{√}{\ensuremath{\surd}}
 \newunicodechar{×}{\ensuremath{\times}}
 \newunicodechar{∫}{\ensuremath{\int}}
+\newunicodechar{₁}{\ensuremath{{}_1}}
+\newunicodechar{∞}{\ensuremath{\infty}}
+\newunicodechar{∨}{\ensuremath{\vee}}
 
 \DefineVerbatimEnvironment{lean}{Verbatim}{fontsize=\small,frame=leftline,framerule=0.6pt,
   rulecolor=\color{gray!60},xleftmargin=1em}
@@ -43,10 +46,9 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{Closed Near-Circular Orbits Force a Power Law:\\
-A Formal Proof of the First Half of Bertrand's Theorem in Lean~4}
+\title{A Formal Proof of Bertrand's Theorem in Lean~4}
 \author{Nichlas Löfdahl \and Claude (Anthropic)\thanks{AI system (model Claude Opus 5.5), developed by Anthropic.
-Claude designed the formalization, wrote the Lean proofs (in part via parallel sub-agents) and drafted this
+Claude designed the formalization and proof strategy, wrote the Lean proofs (in part via parallel sub-agents) and drafted this
 manuscript in collaboration with the first author.}}
 \date{October 2026}
 
@@ -55,17 +57,21 @@ manuscript in collaboration with the first author.}}
 \maketitle
 
 \begin{abstract}
-Bertrand's theorem (1873) states that the only central forces for which every bounded orbit is
-closed are the inverse-square law and Hooke's law. All standard proofs share a first step. If
-every orbit near each stable circular orbit is closed, then the near-circular apsidal angle
-$\pi/\sqrt{3+rV''/V'}$ must be a constant rational multiple of $\pi$, so the force is a power law
-$V'(r)=C\,r^{\beta^2-3}$ with $\beta\in\mathbb{Q}_{>0}$. We give a machine-checked proof of this
-step in Lean~4 with Mathlib, with the apsidal angle defined as an honest singular integral over
-the classically allowed region. The analytic core is a one-dimensional Morse lemma, proved via
-L'Hôpital's rule. A trigonometric substitution in Morse coordinates then
-turns the apsidal integral into a regular integral. Together they show that the apsidal angle is
-continuous in the energy up to the circular orbit, where it equals $\pi/\sqrt{U''}$. To our
-knowledge this is the first formalization of any part of Bertrand's theorem.
+Bertrand's theorem (1873) states that the only central forces for which bounded orbits are closed
+are the inverse-square law and Hooke's law. We give a machine-checked proof in Lean~4 with
+Mathlib of the local form of the theorem, in the spirit of Féjoz and Kaczmarek (after Herman).
+Suppose the potential $V$ is smooth on an interval of radii, every circular orbit there is
+stable, and every orbit sufficiently close to a circular one is closed. Then $V'(r)=C/r^2$ or
+$V'(r)=Cr$ with $C>0$. The apsidal angle is defined as an honest singular integral over the
+classically allowed region. The proof has two stages. First, a one-dimensional Morse lemma and a
+trigonometric substitution show that the apsidal angle is continuous in the energy up to the
+circular orbit, so closedness forces it to be constant. This makes $\sqrt{3+rV''/V'}$ a rational
+constant, so the force is a power law. Second, in a smooth Morse chart the apsidal angle equals
+$\pi X'(0)+\tfrac{\pi}{2}X'''(0)\,\varepsilon+o(\varepsilon)$. Constancy forces $X'''(0)=0$,
+which is the classical isochrony condition $5U'''^2=3U''U''''$, and for a power law this leaves
+only Newton and Hooke. Along the way we formalize a real Hadamard lemma and a smooth
+one-dimensional Morse lemma. To our knowledge this is the first formalization of Bertrand's
+theorem.
 \end{abstract}
 
 \section{Introduction}
@@ -76,15 +82,20 @@ Arnold~\cite{arnold}. Rigorous treatments are surprisingly delicate. Arnold's sk
 nontrivial analysis in its limits. Féjoz and Kaczmarek~\cite{fejoz2004} give a careful local proof
 via Birkhoff invariants, and many elementary proofs have since appeared (e.g.~\cite{chin2015}).
 
-Most proofs proceed in two stages:
+We formalize the theorem in two stages, both using only orbits near circular ones:
 \begin{enumerate}
-  \item[(I)] \emph{Near-circular orbits.} If all orbits close to stable circular orbits are
-  closed, the force is a power law $F\propto r^{\beta^2-3}$ with rational $\beta$.
-  \item[(II)] \emph{Power laws.} Among power laws, only $\beta=1$ (Kepler) and $\beta=2$ (harmonic
-  oscillator) have all bounded orbits closed.
+  \item[(I)] \emph{Power law.} If all orbits close to stable circular orbits are closed, the
+  apsidal angle is constant near each circular orbit and the force is a power law
+  $V'\propto r^{\beta^2-3}$ with rational $\beta$.
+  \item[(II)] \emph{Newton or Hooke.} The second-order term of the apsidal angle in the energy
+  must vanish. For a power law this leaves only $\beta=1$ (Newton) and $\beta=2$ (Hooke).
 \end{enumerate}
-This paper formalizes stage (I) completely in Lean~4~\cite{mathlib2020}. Stage (II) and the link
-between closed trajectories and apsidal angles are left for future work
+Stage (I) is the common first step of most proofs. For stage (II), many textbooks instead compare
+limits of the apsidal angle at extreme energies, which needs hypotheses on \emph{all} bounded
+orbits. We follow the local route of Féjoz and Kaczmarek~\cite{fejoz2004}, which needs only
+near-circular orbits. Their abstract states the theorem in exactly this local form. Everything is
+checked in Lean~4 with Mathlib~\cite{mathlib2020}. The link between closed trajectories of
+Newton's equations and the apsidal angle is taken as the definition of closedness
 (\S\ref{sec:discussion}). The development is part of the repository
 \url{https://github.com/Crotalus/ai-formalized} (folder \texttt{bertrand}). It builds with Lean
 \texttt{v4.35.0} and Mathlib commit \texttt{56a0058}.
@@ -167,6 +178,32 @@ in $\pi\mathbb{Q}$ can perfectly well have an irrational limit. This is why the 
 formula $\Phi\to\pi/\sqrt{U''}$, which textbooks derive by linearization, does not by itself
 prove the step.
 
+\begin{theorem}[Bertrand]\label{thm:bertrand}
+Under the hypotheses of Theorem~\ref{thm:main}, with $V$ smooth ($C^\infty$) on $(a,b)$, there is
+$C>0$ such that either $V'(r)=C/r^2$ on $(a,b)$ (inverse-square law) or $V'(r)=Cr$ on $(a,b)$
+(Hooke's law).
+\end{theorem}
+
+\begin{lean}
+theorem bertrand {V : ℝ → ℝ} {a b : ℝ} (ha : 0 < a) (hab : a < b)
+    (hV : ContDiffOn ℝ ∞ V (Ioo a b))
+    (hpos : ∀ r ∈ Ioo a b, 0 < deriv V r)
+    (hstab : ∀ r ∈ Ioo a b, 0 < 3 * deriv V r + r * iteratedDeriv 2 V r)
+    (hclosed : ∀ r ∈ Ioo a b, ∀ᶠ E in 𝓝[>] (circularEnergy V r),
+      ∃ q : ℚ, orbitApsidalAngle V a b r E = q * π) :
+    ∃ C > 0, (∀ r ∈ Ioo a b, deriv V r = C / r ^ 2) ∨ (∀ r ∈ Ioo a b, deriv V r = C * r)
+\end{lean}
+
+\paragraph{Proof outline of Theorem~\ref{thm:bertrand}.} By the proof of Theorem~\ref{thm:main},
+$V'=Cr^p$ with $p=\beta^2-3$, and near each circular orbit the apsidal angle is \emph{constant},
+$\Phi(U_0+\varepsilon)=\pi/\sqrt{U''(x_0)}$. Take a \emph{smooth} Morse chart $X$
+(\S\ref{sec:smooth}). Then $\int_{-\pi/2}^{\pi/2}X'(\sqrt{2\varepsilon}\sin\theta)\,d\theta=\pi X'(0)$
+for all small $\varepsilon$, which forces $X'''(0)=0$ (\S\ref{sec:second}). Differentiating
+$U(X(s))=U_0+s^2/2$ four times turns this into $5U'''^2=3U''U''''$ at $x_0$
+(\S\ref{sec:isochrony}). For the power law, $U''=p+3$, $U'''=-(p+2)(p+3)/x_0$ and
+$U''''=(p+2)(p+3)(p+4)/x_0^2$, so the condition becomes $(p+2)(p+3)^2(p-1)=0$. Since $p+3=\beta^2>0$,
+we get $p=-2$ or $p=1$.
+
 \section{The one-dimensional Morse lemma}\label{sec:morse}
 
 \begin{lean}
@@ -204,30 +241,101 @@ integrability of the singular integrand. Continuity of
 $F(\varepsilon)=\int X'(\sqrt{2\varepsilon}\sin\theta)\,d\theta$ on $[0,\rho^2/2)$ follows from
 continuity of parametric integrals with jointly continuous integrand.
 
+\section{A smooth Morse chart}\label{sec:smooth}
+
+The second-order argument needs $X\in C^3$, so the $C^1$ chart of \S\ref{sec:morse} is not
+enough. In \S\ref{sec:morse}, $q(x)=(U(x)-U(x_0))/(x-x_0)^2$ takes Lean's junk value $0$ at $x_0$,
+which is harmless for $C^1$ but useless for higher smoothness. The smooth version instead uses
+\[
+  q=\operatorname{dslope}(\operatorname{dslope}U\,x_0)\,x_0,
+\]
+and proves a real \emph{Hadamard lemma}: if $f$ is smooth then so is
+$\operatorname{dslope}f\,a$. Mathlib has this only for complex-differentiable functions. The proof
+writes $\operatorname{dslope}f\,a\,(x)=\int_0^1f'(a+t(x-a))\,dt$ and shows that
+$x\mapsto\int_0^1H(x,t)\,dt$ is smooth for smooth $H$, by induction on the order of
+differentiability with differentiation under the integral sign. A bump function first replaces $U$
+by a globally smooth function that agrees with it near $x_0$. The inverse of
+$s=(x-x_0)\sqrt{2q}$ is then smooth by Mathlib's \texttt{OpenPartialHomeomorph.contDiffAt\_symm}.
+
+\begin{lean}
+theorem exists_smoothMorseChart (hΩ : IsOpen Ω) (hx₀ : x₀ ∈ Ω)
+    (hU : ContDiffOn ℝ ∞ U Ω) (h1 : deriv U x₀ = 0) (h2 : 0 < iteratedDeriv 2 U x₀) :
+    ∃ c : MorseChart U Ω x₀, ContDiffOn ℝ ∞ c.X (Ioo (-c.ρ) c.ρ) ∧
+      deriv c.X 0 = 1 / √(iteratedDeriv 2 U x₀)
+\end{lean}
+
+\section{A constant apsidal angle forces $X'''(0)=0$}\label{sec:second}
+
+Write $g=X'$. Taylor's theorem with Peano remainder (\texttt{taylor\_isLittleO}) gives
+$g(y)=g(0)+g'(0)y+\tfrac12g''(0)y^2+R(y)$ with $|R(y)|\le\eta y^2$ for small $|y|$. Integrating
+along $y=\sigma\sin\theta$ and using $\int\sin\theta=0$ and $\int\sin^2\theta=\pi/2$ over
+$[-\pi/2,\pi/2]$:
+\[
+  \int_{-\pi/2}^{\pi/2}X'(\sigma\sin\theta)\,d\theta=\pi X'(0)+\frac{\pi}{4}X'''(0)\,\sigma^2+O(\eta\sigma^2).
+\]
+If the left side equals $\pi X'(0)$ for all small $\sigma$, choosing $\eta=|X'''(0)|/8$ gives a
+contradiction unless $X'''(0)=0$.
+
+\begin{lean}
+theorem iteratedDeriv_three_eq_zero_of_integral_const {X : ℝ → ℝ} {ρ ε₁ : ℝ} (hρ : 0 < ρ)
+    (hε₁ : 0 < ε₁) (hX : ContDiffOn ℝ ∞ X (Ioo (-ρ) ρ))
+    (h : ∀ ε ∈ Ioo 0 ε₁, ∫ θ in -(π / 2)..π / 2, deriv X (√(2 * ε) * sin θ) = π * deriv X 0) :
+    iteratedDeriv 3 X 0 = 0
+\end{lean}
+
+\section{The isochrony condition}\label{sec:isochrony}
+
+Differentiating $U(X(s))=U(x_0)+s^2/2$ gives, with $u_k=U^{(k)}(x_0)$ and derivatives of $X$ at
+$0$: $u_2X'^2=1$, then $X''=-u_3X'^2/(3u_2)$, and in general
+$X'''=(5u_3^2-3u_2u_4)/(12u_2^4X')$. The formal proof derives identities (1)--(4) as equalities of
+functions on the chart domain, each by differentiating the previous one, and evaluates the fourth
+at $s=0$. Only the consequence $X'''(0)=0\Rightarrow5u_3^2=3u_2u_4$ is stated. This is the
+well-known second-order condition for an oscillator's period to be independent of its amplitude.
+
+\begin{lean}
+theorem MorseChart.isochrony_of_iteratedDeriv_three_eq_zero (c : MorseChart U Ω x₀)
+    (hΩ : IsOpen Ω) (hU : ContDiffOn ℝ ∞ U Ω) (hX : ContDiffOn ℝ ∞ c.X (Ioo (-c.ρ) c.ρ))
+    (h3 : iteratedDeriv 3 c.X 0 = 0) :
+    5 * iteratedDeriv 3 U x₀ ^ 2 = 3 * iteratedDeriv 2 U x₀ * iteratedDeriv 4 U x₀
+\end{lean}
+
+For a power law $V'=Cr^p$, the derivative of the effective potential near $x_0$ is
+$U'(x)=x-Kx^{-(p+2)}$ with $K=CM^{p+1}$, and $Kx_0^{-(p+2)}=x_0$ at the circular orbit. The
+higher derivatives follow by differentiating real powers (lemma
+\texttt{iteratedDeriv\_effPot\_powerLaw}).
+
 \section{Discussion}\label{sec:discussion}
 
-\paragraph{Size and checking.} The development consists of five files, about 750 lines in all. It
-has no \texttt{sorry}, and \texttt{\#print axioms} on the main theorem reports only
-\texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}. The proof was developed in
-parallel. We first fixed a small shared interface: the definition of \texttt{apsidalAngle} and a
-\texttt{MorseChart} structure. Separate agents then proved the Morse lemma and the chart
-computation against it, while the physics layer and the assembly were written in parallel.
+\paragraph{Size and checking.} The development consists of ten files, about 1500 lines in all. It
+has no \texttt{sorry}, and \texttt{\#print axioms Bertrand.bertrand} reports only \texttt{propext},
+\texttt{Classical.choice} and \texttt{Quot.sound}. The proof was developed in parallel. For each
+stage we first fixed a small interface (the definition of \texttt{apsidalAngle}, the
+\texttt{MorseChart} structure and the exact statements of the analytic lemmas). Sub-agents then
+proved the Morse lemmas, the chart computation, the Taylor argument and the isochrony identity
+against it, while the physics layer and the assembly were written alongside. Every agent result was
+re-checked by a full build.
 
-\paragraph{Stage II.} With $V'=Cr^{\beta^2-3}$ on all of $(0,\infty)$ and all bounded orbits
-closed, the same continuity-plus-rationality argument, applied over the connected range of bound
-energies, shows that $\Phi(E)=\pi/\beta$ for every bound energy. Comparing with the limit
-$E\to\infty$ for $\beta^2>2$ (where $\Phi\to\pi/2$) and $E\to0^-$ for $\beta^2<2$ (where
-$\Phi\to\pi/\beta^2$) leaves $\beta=2$ and $\beta=1$. Formalizing this needs a global Morse chart
-for a single-well potential and two asymptotic evaluations of the apsidal integral. The
-regularized integral of \S\ref{sec:chart} is designed to make both tractable.
+\paragraph{Why the local route.} The textbook stage (II) compares the apsidal angle of a power law
+with its limits as $E\to\infty$ or $E\to0^-$, which are $\pi/2$ and $\pi/\beta^2$ respectively.
+That needs closedness of \emph{all} bounded orbits, a Morse chart covering the whole well and two
+asymptotic evaluations of singular integrals. The second-order route needs only near-circular
+orbits and finite Taylor expansions. It gives the stronger local theorem and reuses the same
+regularized integral as stage (I).
 
-\paragraph{Trajectories.} We take as given that an orbit closes exactly when
-$\Phi\in\pi\mathbb{Q}$. Deriving this from Newton's equations (Binet's equation and periodicity of
-the radial motion) would connect the result to Physlib's central-force library.
+\paragraph{Limitations.}
+\begin{itemize}
+  \item \emph{Closed orbits.} We take ``closed'' to mean $\Phi\in\pi\mathbb{Q}$. Deriving the
+  apsidal-angle description from Newton's equations (Binet's equation and periodicity of the
+  radial motion) would connect the result to Physlib's central-force library.
+  \item \emph{Converse.} We do not formalize the converse (that Newton and Hooke potentials
+  satisfy the hypotheses, with $\Phi\equiv\pi$ and $\Phi\equiv\pi/2$). We checked it
+  numerically for our definition of $\Phi$; it also confirms that the hypotheses are not vacuous.
+  \item \emph{Smoothness.} We assume $V\in C^\infty$; $C^5$ would suffice.
+\end{itemize}
 
 \paragraph{Author contributions.} N.L.\ chose the problem, directed the work and reviewed the
 results. Claude, an AI system developed by Anthropic, designed the formal statements and proof
-architecture, wrote the Lean proofs (delegating the Morse lemma and the chart computation to
+architecture, wrote the Lean proofs (delegating the analytic lemmas to
 sub-agents) and drafted the manuscript. All statements were checked by the Lean kernel. As an AI
 system cannot take responsibility for a publication, N.L.\ is accountable for its content.
 

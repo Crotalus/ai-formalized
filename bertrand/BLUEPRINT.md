@@ -1,5 +1,17 @@
 # Bertrand's theorem — formalization blueprint
 
+**Status (2026-10-27): COMPLETE.** Part II was done via the local second-order route below
+(not the energy-limit route originally planned): `Bertrand/Full.lean : bertrand`.
+
+## Part II as done: second-order (isochrony) route
+Part I gives V' = C r^p and Φ constant near each circular orbit. Smooth Morse chart
+(`SmoothChart`) ⇒ Φ(ε) = ∫ X'(√(2ε) sin θ) dθ = π X'(0) for small ε ⇒ X'''(0) = 0
+(`ConstantPeriod`) ⇒ 5U'''² = 3U''U'''' (`ChartDerivs`) ⇒ for power law (p+2)(p-1) = 0
+(`PowerLaw`) ⇒ Newton or Hooke.
+
+---
+Original plan (kept for reference):
+
 Goal: Bertrand's theorem (only `V ∝ -1/r` and `V ∝ r²` give closed bounded orbits), staged.
 Unit mass. Variable `x = M / r`; effective potential `U x = x²/2 + V (M/x)`; the radial motion in
 the polar angle θ is an oscillation in `U`; apsidal angle Φ = half-period = `∫ dx / √(2(E - U))`

@@ -1,24 +1,34 @@
-# Bertrand's theorem (part I) in Lean 4
+# Bertrand's theorem in Lean 4
 
-**Closed near-circular orbits force a power law.** If every circular orbit with radius in `(a, b)`
-is stable and every nearby orbit is closed (apsidal angle ∈ πℚ), then `3 + rV''/V' = β²` for a
-constant rational `β > 0` and the force is a power law `V'(r) = C r^(β²-3)`. This is the first
-half of Bertrand's theorem; part II (only β = 1, 2 survive) is in progress — see
-[`BLUEPRINT.md`](BLUEPRINT.md).
+**Theorem (local Bertrand, after Herman / Féjoz–Kaczmarek).** Let `V` be smooth on radii `(a, b)`,
+with every circular orbit there stable (`V' > 0`, `3V' + rV'' > 0`). If every orbit close enough to
+a circular one is closed (apsidal angle ∈ πℚ), then `V'(r) = C / r²` (Newton) or `V'(r) = C r`
+(Hooke) for some `C > 0`. Lean: `Bertrand.bertrand` in `Bertrand/Full.lean`.
 
 **Paper:** [`paper/main.pdf`](paper/main.pdf) (Nichlas Löfdahl, Claude).
+
+No `sorry`; `#print axioms Bertrand.bertrand` shows only `propext`, `Classical.choice`, `Quot.sound`.
 
 ## Files
 
 | File | Content |
 |---|---|
-| `Bertrand/Chart.lean` | `apsidalAngle` (singular integral over the allowed component), `MorseChart` |
-| `Bertrand/MorseLemma.lean` | 1-D Morse lemma: `exists_morseChart` (via L'Hôpital + inverse function theorem) |
-| `Bertrand/ApsidalChart.lean` | apsidal angle = `∫ X'(√(2ε) sin θ) dθ`; continuity in the energy |
-| `Bertrand/EffPot.lean` | effective potential, `U'' = 3 + rV''/V'`, rational ⇒ constant, ODE ⇒ power law |
-| `Bertrand/NearCircular.lean` | main theorem `forceLaw_of_closed_nearCircular` |
+| `Chart.lean` | `apsidalAngle` (singular integral over the allowed component), `MorseChart` |
+| `MorseLemma.lean` | C¹ Morse lemma via L'Hôpital + inverse function theorem |
+| `ApsidalChart.lean` | apsidal angle = `∫ X'(√(2ε) sin θ) dθ`; continuity in the energy |
+| `EffPot.lean` | effective potential, `U'' = 3 + rV''/V'`, rational ⇒ constant, ODE ⇒ power law |
+| `NearCircular.lean` | **part I**: `forceLaw_of_closed_nearCircular` (power law, constant apsidal angle) |
+| `SmoothChart.lean` | real Hadamard lemma (smooth `dslope`), smooth Morse chart |
+| `ConstantPeriod.lean` | constant `∫ X'(σ sin θ) dθ` ⇒ `X''' 0 = 0` (Taylor/Peano) |
+| `ChartDerivs.lean` | `X''' 0 = 0` ⇒ isochrony `5U'''² = 3U''U''''` |
+| `PowerLaw.lean` | `U''`, `U'''`, `U''''` for a power law; isochrony ⇒ `p = -2 ∨ p = 1` |
+| `Full.lean` | **Bertrand's theorem** `bertrand` |
 
 ## Building
 
 From this folder (Lean `v4.35.0`, Mathlib `56a0058`): `lake exe cache get && lake build`.
 `scripts/check.sh <file>` elaborates one file and lists remaining `sorry`s.
+
+## Not (yet) formalized
+- Closedness is defined via the apsidal angle; deriving this from Newton's equations is future work.
+- The converse (Newton/Hooke satisfy the hypotheses) — checked numerically only.
