@@ -4,7 +4,7 @@ A machine-checked formalization of the classical Kepler problem in [Lean 4](http
 on top of [Physlib](https://github.com/leanprover-community/physlib) and Mathlib.
 
 **Paper:** [`paper/main.pdf`](paper/main.pdf) — *A Formal Proof of the Conservation of the
-Laplace–Runge–Lenz Vector and Kepler's First Law in Lean 4* (Nichlas Löfdahl, Claude).
+Laplace–Runge–Lenz Vector, Kepler's First Law and the Hidden so(4) Symmetry in Lean 4* (Nichlas Löfdahl, Claude).
 
 ## Results (`KeplerLRL/Kepler.lean`)
 
@@ -21,6 +21,23 @@ For a particle of mass `m` in the potential `V r = -k / r`, with `L = q × p` an
 | `poissonBracket_lrlVector_hamiltonian` | `{Aᵢ, H} = 0` away from the origin |
 | `lrlVector_eq_of_hamiltonEqOp` | `A` is constant along solutions of Hamilton's equations |
 | `inner_lrlVector_position_of_hamiltonEqOp` | Kepler's first law along trajectories |
+
+## The hidden `so(4)` symmetry (`KeplerLRL/SO4.lean`)
+
+Components along fixed vectors `a`, `b` (`X_a = ⟪a, X⟫`); `M = A / √(-2 m H)` and
+`J± = (L ± M) / 2` on the bound region `H < 0`:
+
+| Lean name | Statement |
+|---|---|
+| `poissonBracket_angularMomentum_angularMomentum` | `{L_a, L_b} = L_{a×b}` |
+| `poissonBracket_lrlVector_angularMomentum` | `{A_a, L_b} = A_{a×b}` |
+| `poissonBracket_lrlVector_lrlVector` | `{A_a, A_b} = -2 m H L_{a×b}` |
+| `poissonBracket_angularMomentum_hamiltonian` | `{L_a, H} = 0` for any central force |
+| `poissonBracket_scaledLrlVector_scaledLrlVector` | `{M_a, M_b} = L_{a×b}` |
+| `poissonBracket_jPlus_jPlus`, `…_jMinus_jMinus` | `{J±_a, J±_b} = J±_{a×b}` |
+| `poissonBracket_jPlus_jMinus` | `{J+_a, J-_b} = 0`, so `so(4) ≅ so(3) ⊕ so(3)` |
+| `norm_jPlus_sq`, `norm_jMinus_sq` | Casimirs `‖J±‖² = -m k² / (8 H)` |
+| `hamiltonian_eq_of_norm_jPlus` | `H = -m k² / (8 ‖J+‖²)` |
 
 No `sorry`; `#print axioms` shows only `propext`, `Classical.choice`, `Quot.sound`.
 
