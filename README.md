@@ -12,7 +12,7 @@ Physlib/Mathlib versions), the Lean sources, and a short paper.
 | [`kepler-lrl/`](kepler-lrl/) | Kepler problem: conservation of the Laplace–Runge–Lenz vector, Kepler's first law, and the hidden `so(4)` Poisson algebra | Complete, no `sorry` · [paper](kepler-lrl/paper/main.pdf) |
 | [`earnshaw/`](earnshaw/) | Earnshaw's theorem: harmonic functions have no strict local extrema (no stable electrostatic equilibrium) | Complete, no `sorry` · [paper](earnshaw/paper/main.pdf) |
 | [`bertrand/`](bertrand/) | Bertrand's theorem (local form): closed near-circular orbits ⇒ inverse-square or Hooke force | Complete, no `sorry` · [paper](bertrand/paper/main.pdf) |
-| [`lieb-robinson/`](lieb-robinson/) | Lieb–Robinson bound on a finite lattice: finite speed of propagation for local quantum dynamics | Core complete, no `sorry` (paper pending) |
+| [`lieb-robinson/`](lieb-robinson/) | Lieb–Robinson bound on finite lattices (finite speed of propagation) and exponential clustering in gapped ground states | Complete, no `sorry` · [paper](lieb-robinson/paper/main.pdf) |
 
 ## Building a problem
 

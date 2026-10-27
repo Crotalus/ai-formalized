@@ -29,12 +29,14 @@ interaction and the number of terms meeting `X`, not on the size of the lattice.
 
 - `LiebRobinson.Interaction.far_of_dist` : distance in the metric bounds distance in the overlap
   graph.
-- `LiebRobinson.Interaction.lieb_robinson` : the Lieb–Robinson bound.
+- `LiebRobinson.Interaction.lieb_robinson` : the Lieb–Robinson bound for `t ≥ 0`.
+- `LiebRobinson.Interaction.lieb_robinson_abs` : the bound `e^{v |t| - d / R}` for all times.
 
 ## iii. Table of contents
 
 - A. Distance in the overlap graph
 - B. The Lieb–Robinson bound
+- C. Negative times
 
 ## iv. References
 
@@ -150,6 +152,54 @@ theorem lieb_robinson {X Y : Finset Λ} {A B : 𝔄} (hA : A ∈ N.alg X) (hB : 
         rw [← Real.exp_add, Real.exp_le_exp]
         linarith
     _ = _ := by ring
+
+/-!
+
+## C. Negative times
+
+-/
+
+/-- The interaction `-Φ`, which generates the same dynamics backwards in time. -/
+def neg : Interaction N where
+  Φ Z := -I.Φ Z
+  mem_alg Z := neg_mem (I.mem_alg Z)
+  isSelfAdjoint Z := (I.isSelfAdjoint Z).neg
+
+omit [DecidableEq Λ] [PseudoMetricSpace Λ] in
+/-- The Hamiltonian of `-Φ` is `-H`. -/
+lemma hamiltonian_neg : I.neg.hamiltonian = -I.hamiltonian := by
+  simp [hamiltonian, neg, Finset.sum_neg_distrib]
+
+omit [DecidableEq Λ] [PseudoMetricSpace Λ] in
+/-- The dynamics of `-Φ` is the dynamics of `Φ` run backwards. -/
+lemma evolution_neg (t : ℝ) (A : 𝔄) : I.neg.evolution t A = I.evolution (-t) A := by
+  simp [evolution, expI, hamiltonian_neg, smul_neg, neg_smul]
+
+omit [PseudoMetricSpace Λ] in
+/-- `-Φ` and `Φ` have the same non-zero terms. -/
+lemma neighbours_neg : I.neg.neighbours = I.neighbours := by
+  funext Z
+  ext Z'
+  simp only [neighbours, Finset.mem_filter, Finset.mem_univ, true_and]
+  simp [neg]
+
+/-- **The Lieb–Robinson bound for all times.** Under the hypotheses of `lieb_robinson`, for every
+real `t`, `‖[τ_t(A), B]‖ ≤ 2 e ‖A‖ ‖B‖ (|neighbours X| / κ) e^{v |t| - d / R}`. -/
+theorem lieb_robinson_abs {X Y : Finset Λ} {A B : 𝔄} (hA : A ∈ N.alg X) (hB : B ∈ N.alg Y)
+    {J R d : ℝ} {κ : ℕ} (hκ0 : 0 < κ) (hJ0 : 0 ≤ J) (hJ : ∀ Z, ‖I.Φ Z‖ ≤ J)
+    (hκ : ∀ Z, (I.neighbours Z).card ≤ κ) (hR0 : 0 < R)
+    (hR : ∀ Z, I.Φ Z ≠ 0 → ∀ x ∈ Z, ∀ y ∈ Z, dist x y ≤ R)
+    (hd0 : 0 < d) (hd : ∀ x ∈ X, ∀ y ∈ Y, d ≤ dist x y) (t : ℝ) :
+    ‖commutator (I.evolution t A) B‖ ≤
+      2 * Real.exp 1 * ‖A‖ * ‖B‖ * ((I.neighbours X).card / κ) *
+        Real.exp (2 * Real.exp 1 * J * κ * |t| - d / R) := by
+  rcases le_total 0 t with ht | ht
+  · rw [abs_of_nonneg ht]
+    exact I.lieb_robinson hA hB hκ0 hJ0 hJ hκ hR0 hR hd0 hd ht
+  · have h := I.neg.lieb_robinson hA hB hκ0 hJ0 (fun Z => by simpa [neg] using hJ Z)
+      (by simpa [neighbours_neg] using hκ) hR0 (fun Z hZ => hR Z (by simpa [neg] using hZ))
+      hd0 hd (neg_nonneg.mpr ht)
+    rwa [evolution_neg, neg_neg, neighbours_neg, ← abs_of_nonpos ht] at h
 
 end Interaction
 

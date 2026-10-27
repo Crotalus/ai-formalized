@@ -1,0 +1,431 @@
+% Compile with: latexmk -pdf main
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{newunicodechar}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\usepackage{booktabs}
+
+% Unicode characters appearing in Lean code
+\newunicodechar{‖}{\ensuremath{\|}}
+\newunicodechar{•}{\ensuremath{\bullet}}
+\newunicodechar{₀}{\ensuremath{{}_0}}
+\newunicodechar{₁}{\ensuremath{{}_1}}
+\newunicodechar{₂}{\ensuremath{{}_2}}
+\newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}
+\newunicodechar{ℂ}{\ensuremath{\mathbb{C}}}
+\newunicodechar{ℕ}{\ensuremath{\mathbb{N}}}
+\newunicodechar{𝔄}{\ensuremath{\mathfrak{A}}}
+\newunicodechar{Λ}{\ensuremath{\Lambda}}
+\newunicodechar{Φ}{\ensuremath{\Phi}}
+\newunicodechar{κ}{\ensuremath{\kappa}}
+\newunicodechar{γ}{\ensuremath{\gamma}}
+\newunicodechar{ℋ}{\ensuremath{\mathcal{H}}}
+\newunicodechar{→}{\ensuremath{\to}}
+\newunicodechar{∀}{\ensuremath{\forall}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∩}{\ensuremath{\cap}}
+\newunicodechar{∑}{\ensuremath{\sum}}
+\newunicodechar{∫}{\ensuremath{\int}}
+
+\DefineVerbatimEnvironment{lean}{Verbatim}{fontsize=\small,frame=leftline,framerule=0.6pt,
+  rulecolor=\color{gray!60},xleftmargin=1em}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\fA}{\mathfrak{A}}
+\newcommand{\norm}[1]{\|#1\|}
+\newcommand{\Far}{\mathrm{Far}}
+
+\title{A Formal Proof of the Lieb--Robinson Bound\\ and Exponential Clustering\\ on Finite Lattices in Lean~4}
+\author{Nichlas Löfdahl \and Claude (Anthropic)\thanks{AI system (model Claude Opus 5.5), developed by Anthropic.
+Claude wrote the Lean proofs and drafted this manuscript in collaboration with the first author.}}
+\date{October 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\begin{abstract}
+The Lieb--Robinson bound states that in a quantum lattice system with local interactions,
+commutators of time-evolved local observables are exponentially small outside an effective light
+cone, with a velocity independent of the size of the system. We present a machine-checked proof
+of this bound for finite lattices in the Lean~4 proof assistant, on top of Mathlib. The setting
+is a C$^*$-algebra with a subalgebra of observables for each region, subject only to the axiom that
+observables in disjoint regions commute, so no tensor products are needed. For an interaction of
+strength $J$, range $R$ and coordination $\kappa$ we prove
+$\norm{[\tau_t(A),B]}\le 2e\,\norm{A}\norm{B}\,(n_X/\kappa)\,e^{v|t|-d(X,Y)/R}$ with $v=2eJ\kappa$,
+where $n_X$ is the number of interaction terms meeting the support of $A$. The proof removes the
+norm-preserving part of the dynamics with an explicit interaction-picture unitary, which avoids
+time-dependent propagators, and iterates the resulting integral inequality by induction on
+distance in the overlap graph of the interaction. We instantiate the abstract theorem for the
+concrete lattice model of the Physlib library. As the main application we prove the exponential
+clustering theorem: in a unique ground state with spectral gap $\gamma$, connected correlations
+of observables at distance $d$ decay like $e^{-\mu d}$ with
+$\mu=\min(1/2,\gamma/(8eJ\kappa))/R$. The spectral filter in its proof is evaluated with Fubini's
+theorem and the Fourier transform of the Gaussian, without the error function or principal
+values. The development uses no axioms beyond Lean's standard three.
+\end{abstract}
+
+\section{Introduction}
+
+Lieb and Robinson showed in 1972 that quantum spin systems with finite-range interactions have a
+finite group velocity \cite{liebrobinson1972}. Their bound became a central tool of quantum
+many-body physics only three decades later, when Hastings, Koma, Nachtergaele, Ogata, Sims and
+others used it to prove exponential clustering of correlations in gapped ground states
+\cite{nachtergaelesims2006,hastingskoma2006}, to control the propagation of correlations
+\cite{nachtergaeleogatasims2006}, and, among many other results, to prove the higher-dimensional
+Lieb--Schultz--Mattis theorem and the stability of topological order. A survey is
+\cite{nachtergaelesims2010}.
+
+Despite this central role, we are not aware of a formalization of the Lieb--Robinson bound in any
+proof assistant. Before starting we searched the web, the Physlib library
+\cite{toobysmith2024heplean} and its open pull requests and issues. Physlib contains the
+kinematics of quantum lattice systems (nets of local algebras, the quasi-local algebra,
+interactions, finite-volume Hamiltonians and Gibbs states) but no time evolution and no locality
+estimate. This note fills that gap for finite lattices.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item An abstract setting that uses only the commutation of observables in disjoint regions
+  (\S\ref{sec:setting}).
+  \item The basic integral inequality, proved with an explicit interaction-picture unitary
+  instead of a time-dependent propagator (\S\ref{sec:onestep}).
+  \item Its iteration by induction on a recursive notion of distance in the overlap graph of the
+  interaction, without matrices or explicit chains (\S\ref{sec:iteration}).
+  \item The bound in the familiar metric form $e^{v|t|-d/R}$ (\S\ref{sec:metric}), and its
+  instantiation for Physlib's concrete lattice model (\S\ref{sec:lattice}).
+  \item The exponential clustering theorem for gapped ground states (\S\ref{sec:clustering}).
+\end{itemize}
+
+The source is available in the \texttt{lieb-robinson} folder of
+\url{https://github.com/Crotalus/ai-formalized}; it builds against Physlib commit \texttt{3bfc7af}
+and Lean~\texttt{v4.35.0}.
+
+\section{Setting}\label{sec:setting}
+
+Let $\Lambda$ be a finite set of sites and $\fA$ a C$^*$-algebra. Physically $\fA$ is the algebra
+of all observables of the system, for instance $\bigotimes_{x\in\Lambda}M_{n_x}(\mathbb C)$. The
+usual construction through tensor products is cumbersome in current Mathlib, and the
+Lieb--Robinson bound needs very little of it. A \emph{local net} assigns a subalgebra
+$\fA_X\subseteq\fA$ to every region $X\subseteq\Lambda$, and we assume only that observables in
+disjoint regions commute:
+
+\begin{lean}
+structure LocalNet (Λ 𝔄 : Type*) [CStarAlgebra 𝔄] where
+  alg : Finset Λ → Subalgebra ℂ 𝔄
+  commute_of_disjoint : ∀ {X Y : Finset Λ}, Disjoint X Y →
+    ∀ a ∈ alg X, ∀ b ∈ alg Y, Commute a b
+
+structure Interaction (N : LocalNet Λ 𝔄) where
+  Φ : Finset Λ → 𝔄
+  mem_alg : ∀ Z, Φ Z ∈ N.alg Z
+  isSelfAdjoint : ∀ Z, IsSelfAdjoint (Φ Z)
+\end{lean}
+
+We do not even assume that $\fA_X\subseteq\fA_Y$ for $X\subseteq Y$: the proof never uses it. An
+interaction assigns a self-adjoint term $\Phi(Z)\in\fA_Z$ to each region. Its Hamiltonian is
+$H=\sum_Z\Phi(Z)$ and the Heisenberg dynamics is $\tau_t(A)=e^{itH}Ae^{-itH}$, defined with
+Mathlib's exponential in Banach algebras. For self-adjoint $K$ the exponential $e^{itK}$ is
+unitary, so $\tau_t$ is a $*$-automorphism that preserves norms. The commutator is
+$[a,b]=ab-ba$.
+
+The constants of the bound are:
+\begin{itemize}
+  \item the \emph{strength} $J$, with $\norm{\Phi(Z)}\le J$ for all $Z$;
+  \item the \emph{coordination} $\kappa$: at most $\kappa$ regions $Z'$ with $\Phi(Z')\neq0$ meet
+  any region $Z$ with $\Phi(Z)\ne0$ (Lean: \texttt{(I.neighbours Z).card ≤ κ});
+  \item for the metric form, the \emph{range} $R$: every non-zero term has diameter at most $R$.
+\end{itemize}
+
+\section{The integral inequality}\label{sec:onestep}
+
+\begin{lemma}\label{lem:onestep}
+For $A\in\fA_X$, any $B\in\fA$ and $t\ge0$,
+\[
+  \norm{[\tau_t(A),B]}\le\norm{[A,B]}
+  +2\norm{A}\sum_{Z\cap X\ne\emptyset}\int_0^t\norm{[\tau_s(\Phi(Z)),B]}\,ds .
+\]
+\end{lemma}
+
+\begin{proof}
+Split $H=H_1+H_2$, where $H_2$ collects the terms whose region meets $X$. Every term of $H_1$ lives
+in a region disjoint from $X$, so $H_1$ commutes with $A$ and with $e^{isH_1}$. Put
+$U(t)=e^{itH}e^{-itH_1}$ and $V(t)=e^{itH_1}e^{-itH}$, so that $UV=1$ and
+$\tau_t(A)=U(t)\,A\,V(t)$. Then
+\[
+  [\tau_t(A),B]=U(t)\,[A,W(t)]\,V(t),\qquad W(t)=V(t)\,B\,U(t),
+\]
+and since $\norm{U},\norm{V}\le1$ we get
+$\norm{[\tau_t(A),B]}\le\norm{[A,B]}+2\norm A\,\norm{W(t)-W(0)}$. A direct computation gives
+\[
+  W'(s)=e^{isH_1}\,\big[\tau_{-s}(B),\,iH_2\big]\,e^{-isH_1},
+\]
+whose norm is at most $\norm{[H_2,\tau_{-s}(B)]}=\norm{\tau_{-s}([\tau_s(H_2),B])}\le
+\sum_{Z\cap X\neq\emptyset}\norm{[\tau_s(\Phi(Z)),B]}$. Integrating this bound on $W'$ gives
+the claim.
+\end{proof}
+
+The textbook proof \cite{nachtergaelesims2006} obtains the same inequality from the
+differential equation $g'(t)=i[\tau_t(H_2),g(t)]+\dots$ for $g(t)=[\tau_t(A),B]$, using that the
+solution operator of $g'=i[K(t),g]$ is isometric. Formalizing this requires the time-dependent
+propagator of that equation. The interaction-picture unitary $U$ achieves the same effect using
+only exponentials of fixed operators. A Grönwall argument applied directly to $g$ would avoid
+both but gives a weaker inequality, in which the supports of later terms grow with each step;
+iterating it gives only a short-time bound.
+
+In Lean the derivative of $W$ is computed with \texttt{HasDerivAt.mul} for the noncommutative
+product of four factors and checked against the claimed form by \texttt{noncomm\_ring}. The
+integrated bound is Mathlib's comparison theorem
+\texttt{image\_norm\_le\_of\_norm\_deriv\_right\_le\_deriv\_boundary}, with the bounding function
+$t\mapsto\int_0^t g$ differentiated by the fundamental theorem of calculus.
+
+\begin{lean}
+theorem norm_commutator_evolution_le {X : Finset Λ} {A : 𝔄} (hA : A ∈ N.alg X) (B : 𝔄)
+    {t : ℝ} (ht : 0 ≤ t) :
+    ‖commutator (I.evolution t A) B‖ ≤ ‖commutator A B‖ +
+      2 * ‖A‖ * ∑ Z ∈ touching X, ∫ s in (0 : ℝ)..t,
+        ‖commutator (I.evolution s (I.Φ Z)) B‖
+\end{lean}
+
+\section{Iteration}\label{sec:iteration}
+
+Fix $B\in\fA_Y$ and write $f_Z(t)=\norm{[\tau_t(\Phi(Z)),B]}$. Lemma~\ref{lem:onestep} with
+$A=\Phi(Z)$ gives $f_Z(t)\le f_Z(0)+2\norm{\Phi(Z)}\sum_{Z'\cap Z\ne\emptyset}\int_0^tf_{Z'}$, and
+$f_Z(0)=0$ when $Z$ is disjoint from $Y$. Rather than expanding this into a sum over chains, we
+measure distance to $Y$ in the overlap graph by a recursive predicate:
+
+\begin{lean}
+def Far (Y : Finset Λ) : ℕ → Finset Λ → Prop
+  | 0, _ => True
+  | k + 1, Z => I.Φ Z = 0 ∨ (Disjoint Z Y ∧ ∀ Z', (Z' ∩ Z).Nonempty → Far Y k Z')
+\end{lean}
+
+$\Far\,Y\,k\,Z$ says that every chain of overlapping regions with non-zero terms from $Z$ to a
+region meeting $Y$ has at least $k$ steps. A single induction on $k$ then proves:
+
+\begin{lemma}
+If $\Far\,Y\,k\,Z$ and $t\ge0$, then
+$f_Z(t)\le2\norm{\Phi(Z)}\norm B\,(2J\kappa t)^k/k!$.
+\end{lemma}
+
+The base case is $\norm{[a,b]}\le2\norm a\norm b$ together with $\norm{\tau_t(a)}=\norm{a}$. In the step,
+the terms with $\Phi(Z')=0$ vanish, at most $\kappa$ terms remain, and
+$\int_0^t(2J\kappa s)^k/k!\,ds=(2J\kappa)^kt^{k+1}/(k+1)!$. One more application of
+Lemma~\ref{lem:onestep} gives the bound for a general $A$:
+
+\begin{theorem}
+Let $A\in\fA_X$ and $B\in\fA_Y$ with $X\cap Y=\emptyset$, and suppose every region meeting $X$
+satisfies $\Far\,Y\,n$. Then for $t\ge0$
+\[
+  \norm{[\tau_t(A),B]}\le2\norm A\norm B\,n_X\,2J\,(2J\kappa)^n\,\frac{t^{n+1}}{(n+1)!}
+  \le2\norm A\norm B\,\frac{n_X}{\kappa}\,e^{\,2eJ\kappa t-(n+1)} ,
+\]
+where $n_X$ is the number of non-zero terms meeting $X$ (the second form needs $\kappa>0$).
+\end{theorem}
+
+The exponential form uses $x^m/m!\le e^{ex-m}$, which follows from $(ex)^m/m!\le e^{ex}$. No
+infinite series is needed: the polynomial bound is already exact at finite order.
+
+\section{The metric form}\label{sec:metric}
+
+Let $\Lambda$ carry a (pseudo)metric and let every non-zero term have diameter at most $R>0$. A
+chain of $j+1$ overlapping terms spans a distance of at most $(j+1)R$, so a region all of whose
+points are further than $kR$ from $Y$ is $\Far\,Y\,k$ (lemma \texttt{far\_of\_dist}). Choosing
+$n=\lceil d/R\rceil-2$ (truncated at $0$) yields:
+
+\begin{theorem}[Lieb--Robinson bound]
+If every point of $X$ is at distance at least $d>0$ from every point of $Y$, then for
+$A\in\fA_X$, $B\in\fA_Y$ and all real $t$,
+\[
+  \norm{[\tau_t(A),B]}\le 2e\,\norm A\norm B\,\frac{n_X}{\kappa}\,
+  e^{\,v|t|-d/R},\qquad v=2eJ\kappa .
+\]
+\end{theorem}
+
+\begin{lean}
+theorem lieb_robinson_abs {X Y : Finset Λ} {A B : 𝔄} (hA : A ∈ N.alg X) (hB : B ∈ N.alg Y)
+    {J R d : ℝ} {κ : ℕ} (hκ0 : 0 < κ) (hJ0 : 0 ≤ J) (hJ : ∀ Z, ‖I.Φ Z‖ ≤ J)
+    (hκ : ∀ Z, (I.neighbours Z).card ≤ κ) (hR0 : 0 < R)
+    (hR : ∀ Z, I.Φ Z ≠ 0 → ∀ x ∈ Z, ∀ y ∈ Z, dist x y ≤ R)
+    (hd0 : 0 < d) (hd : ∀ x ∈ X, ∀ y ∈ Y, d ≤ dist x y) (t : ℝ) :
+    ‖commutator (I.evolution t A) B‖ ≤
+      2 * Real.exp 1 * ‖A‖ * ‖B‖ * ((I.neighbours X).card / κ) *
+        Real.exp (2 * Real.exp 1 * J * κ * |t| - d / R)
+\end{lean}
+
+Negative times reduce to positive ones: the interaction $-\Phi$ satisfies the same hypotheses and
+generates $\tau_{-t}$. None of the constants $J$, $R$, $\kappa$, $n_X$ depends on $|\Lambda|$.
+
+\section{The concrete lattice model}\label{sec:lattice}
+
+Physlib models a lattice system with a finite configuration space $\Omega_s$ at each site $s$ of a
+possibly infinite set $S$. The operators of a finite region $X\subseteq S$ are the complex matrices
+indexed by configurations of $X$, written \texttt{Alg Ω X}, and a larger region $Y\supseteq X$
+contains them through $M\mapsto M\otimes1$ (\texttt{inclMat}). An interaction assigns a Hermitian
+operator to each finite region, and the Hamiltonian of a finite box $\Lambda_0$ is the sum of the
+lifts of the terms inside it. To apply the abstract theorem we fix a finite box $\Lambda_0$ and
+take:
+\begin{itemize}
+  \item sites: the points of $\Lambda_0$, a finite type;
+  \item algebra: \texttt{Alg Ω Λ₀}, a matrix algebra, with Mathlib's C$^*$-norm (the operator norm
+  for the $\ell^2$ norm on configurations, \texttt{Matrix.Norms.L2Operator});
+  \item local algebras: the images of the lifts $M\mapsto M\otimes1$ from each subregion.
+\end{itemize}
+The only property to verify is that lifts from disjoint regions commute. We prove this by
+computing both products $(M\otimes1)(1\otimes N)$ and $(1\otimes N)(M\otimes1)$ entrywise: each
+has a single non-zero term in the matrix product, at the configuration obtained by gluing.
+
+\begin{lean}
+lemma commute_inclMat_of_disjoint (hX : X ≤ Λ) (hY : Y ≤ Λ) (hd : Disjoint X Y)
+    (M : Alg Ω X) (N : Alg Ω Y) : Commute (inclMat hX M) (inclMat hY N)
+\end{lean}
+
+As a check that the two settings fit together, the Hamiltonian of the abstract interaction
+built from a Physlib interaction equals Physlib's Hamiltonian of the box
+(\texttt{hamiltonian\_toBox}), after reindexing the sum over subsets of the box. The resulting
+corollary states the Lieb--Robinson bound directly for Physlib's operators $A\in$ \texttt{Alg Ω X}
+and $B\in$ \texttt{Alg Ω Y} with $X,Y\subseteq\Lambda_0$, the Physlib Hamiltonian, and strength
+and range hypotheses on the Physlib interaction. Since the lift is contractive, the norms of $A$
+and $B$ may be taken in their own regions. The coordination constant is stated for the box
+interaction; formulating it on the infinite set of regions of $S$ is a matter of bookkeeping.
+
+
+\section{Exponential clustering}\label{sec:clustering}
+
+The most important consequence of the Lieb--Robinson bound is that a spectral gap forces
+correlations to decay exponentially \cite{nachtergaelesims2006,hastingskoma2006}. We take
+$\fA=\mathcal B(\mathcal H)$ for a finite-dimensional Hilbert space $\mathcal H$, which Mathlib
+equips with its C$^*$-algebra structure.
+
+\begin{definition}
+A \emph{gapped ground state} of a self-adjoint $H$ with gap $\gamma>0$ is a unit vector $\Omega$
+with $H\Omega=E_0\Omega$ such that $\langle\varphi,H\varphi\rangle\ge(E_0+\gamma)\norm{\varphi}^2$
+for all $\varphi\perp\Omega$. The connected correlation is
+$\langle AB\rangle-\langle A\rangle\langle B\rangle$, with
+$\langle X\rangle=\langle\Omega,X\Omega\rangle$.
+\end{definition}
+
+The proof has three independent parts.
+
+\paragraph{Spectral expansion.} Expanding in an orthonormal eigenbasis $\varphi_j$ of $H$, with
+energies $E_0+\omega_j$, the function $F(t)=\langle[\tau_t(A),B]\rangle$ becomes
+\[
+  F(t)=F(0)+\sum_j c_j\,(e^{-i\omega_jt}-1)-\sum_j d_j\,(e^{i\omega_jt}-1),
+\]
+with $\sum_jc_j=\langle AB\rangle-\langle A\rangle\langle B\rangle$, $\sum_j|c_j|,\sum_j|d_j|\le
+\norm A\norm B$ (Cauchy--Schwarz and Parseval), and only frequencies $\omega_j\ge\gamma$
+contributing. The last point uses the gap: an eigenvector with energy below $E_0+\gamma$ lies in
+the span of $\Omega$, so it does not contribute to the connected parts. To state the expansion
+with a single frequency list we replace each $\omega_j$ by $\max(\omega_j,\gamma)$, which changes
+only terms with zero coefficient. In Lean this needs the action of the exponential on
+eigenvectors, $e^{K}v=e^{\mu}v$ for $Kv=\mu v$, which we prove from the exponential series.
+
+\paragraph{A Gaussian filter.} The positive-frequency part $\sum_jc_j$ is extracted from $F$ by
+integrating against $e^{-\alpha t^2}/(it)$. Since $F(0)=\langle[A,B]\rangle=0$ for disjoint
+supports, it suffices to know
+\[
+  \int_{\mathbb R}e^{-\alpha t^2}\,\frac{e^{-i\omega t}-1}{it}\,dt
+  =-\sqrt{\pi/\alpha}\int_0^\omega e^{-\sigma^2/4\alpha}\,d\sigma .
+\]
+We prove this by writing $(e^{-i\omega t}-1)/(it)=-\int_0^\omega e^{-i\sigma t}\,d\sigma$,
+exchanging the integrals and using Mathlib's Fourier transform of the Gaussian. The right-hand
+side is odd in $\omega$ and within $(2\sqrt{\pi\alpha}/\gamma)\,e^{-\gamma^2/4\alpha}$ of $-\pi$
+for $\omega\ge\gamma$. This avoids the error function and principal-value integrals, neither of
+which Mathlib provides. Combining with the expansion gives
+$\int e^{-\alpha t^2}F(t)/(it)\,dt=-2\pi\sum_jc_j+\text{(error)}$.
+
+\paragraph{Time-domain bound.} The same integral is bounded by
+$\int e^{-\alpha t^2}|F(t)|/|t|\,dt$. For $|t|\le T$ the Lieb--Robinson bound in polynomial form
+gives $|F(t)|\le K|t|^{n+1}$; for $|t|>T$ we use $|F|\le2\norm A\norm B$ and the Gaussian tail.
+Choosing $T=(n+1)/(4eJ\kappa)$ and $\alpha=\gamma/(2T)$ balances the three errors and yields:
+
+\begin{theorem}[Exponential clustering]
+Let $\Omega$ be a gapped ground state of $H=\sum_Z\Phi(Z)$ with gap $\gamma$, let $A\in\fA_X$ and
+$B\in\fA_Y$ with $X\cap Y=\emptyset$, and suppose every region meeting $X$ satisfies
+$\Far\,Y\,n$. If $J,\kappa>0$, then
+\[
+  |\langle AB\rangle-\langle A\rangle\langle B\rangle|\le\frac2\pi\norm A\norm B
+  \Big(\frac{n_X}{\kappa}e^{-(n+1)/2}+\Big(\frac{4eJ\kappa}\gamma
+  +\sqrt{\frac{2\pi eJ\kappa}\gamma}\Big)e^{-\gamma(n+1)/(8eJ\kappa)}\Big).
+\]
+On a metric lattice with range $R$ and $d(X,Y)\ge d$, the right-hand side becomes
+exponentially small in $d$ at rate $\min(1/2,\gamma/(8eJ\kappa))/R$.
+\end{theorem}
+
+\begin{lean}
+theorem exponential_clustering {γ : ℝ} (hγ : 0 < γ)
+    (G : GappedGroundState I.hamiltonian γ) {X Y : Finset Λ} {A B : ℋ →L[ℂ] ℋ}
+    (hA : A ∈ N.alg X) (hB : B ∈ N.alg Y) (hXY : Disjoint X Y) {J : ℝ} {κ : ℕ}
+    (hκ0 : 0 < κ) (hJ0 : 0 < J) (hJ : ∀ Z, ‖I.Φ Z‖ ≤ J)
+    (hκ : ∀ Z, (I.neighbours Z).card ≤ κ) {n : ℕ}
+    (hn : ∀ Z, (Z ∩ X).Nonempty → I.Far Y n Z) :
+    ‖G.corr A B‖ ≤ 2 / Real.pi * ‖A‖ * ‖B‖ *
+      ((I.neighbours X).card / κ * Real.exp (-(n + 1) / 2) +
+        (4 * Real.exp 1 * J * κ / γ + Real.sqrt (2 * Real.pi * Real.exp 1 * J * κ / γ)) *
+          Real.exp (-γ * (n + 1) / (8 * Real.exp 1 * J * κ)))
+\end{lean}
+
+The rate $\gamma/(8eJ\kappa)\sim\gamma/v$ is of the form $\gamma/v$ up to constants, as in the
+rates obtained by Nachtergaele and Sims and by Hastings and Koma
+\cite{nachtergaelesims2006,hastingskoma2006}; we did not optimize constants. We assume a unique ground state. The degenerate case,
+where correlations are taken in a ground state projection, is not treated.
+
+\section{Discussion}\label{sec:discussion}
+
+\paragraph{Size and checking.} The development consists of 18 definitions and 85 lemmas in
+about 2200 lines, including documentation, in nine files: the setting (\S\ref{sec:setting}), the
+integral inequality (\S\ref{sec:onestep}), the iteration (\S\ref{sec:iteration}), the metric form
+(\S\ref{sec:metric}), the lattice model (\S\ref{sec:lattice}), and four files for exponential
+clustering (\S\ref{sec:clustering}). \texttt{\#print axioms} on the
+main results reports only \texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}. We
+have not run Physlib's contribution linters on these files.
+
+\paragraph{Design choices.} Three decisions kept the Lieb--Robinson part short. First, the axiom that
+disjoint regions commute replaces tensor products and isotony of the net; the bound uses nothing
+else about locality. Second, the interaction-picture unitary replaces the time-dependent
+propagator of the textbook proof. Third, the recursive predicate $\Far$ replaces the sum over
+chains: each induction step needs only one application of the integral inequality and a count
+of neighbours. The proof was developed by first fixing all statements and checking them with
+\texttt{sorry}, after which the files were proved in parallel by separate instances of Claude
+against the frozen interface, and the lattice model was added in the same way. Every claim was then re-verified by a full build.
+
+\paragraph{Constants.} Our velocity $v=2eJ\kappa$ has the same structure as in the literature
+\cite{nachtergaelesims2006,nachtergaelesims2010}, where $v$ is proportional to the interaction
+strength and a local summability constant. The factor $e$ comes from the elementary estimate
+$x^m/m!\le e^{ex-m}$. The prefactor depends on the number $n_X$ of terms meeting $X$, as is
+standard. We did not optimize constants.
+
+\paragraph{Limitations and future work.} The result is for finite lattices. The bounds are uniform
+in the volume, which is what the infinite-volume theory needs, but we do not construct the
+infinite-volume dynamics. Interactions are of finite range: exponentially decaying interactions
+would require the summability (``$F$-function'') formalism of \cite{nachtergaeleogatasims2006}.
+Exponential clustering is proved for a unique gapped ground state in finite dimension; the
+degenerate case and the infinite-volume formulation, where the gap is a property of a
+thermodynamic limit, are not covered. Further applications such as area laws or the
+Lieb--Schultz--Mattis theorem would require substantially more infrastructure.
+
+\paragraph{Author contributions.} N.L.\ chose the problem, directed the work and reviewed the
+results. Claude, an AI system developed by Anthropic, surveyed the literature and libraries,
+designed the statements and the proof architecture, wrote the Lean proofs (in part through
+parallel sub-agents) and drafted the manuscript. All statements were checked by the Lean kernel.
+As an AI system cannot take responsibility for a publication, N.L.\ is accountable for its
+content.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}
