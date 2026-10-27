@@ -1,0 +1,236 @@
+% Compile with: latexmk -pdf main
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{newunicodechar}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+% Unicode characters appearing in Lean code
+\newunicodechar{‖}{\ensuremath{\|}}
+\newunicodechar{•}{\ensuremath{\bullet}}
+\newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}
+\newunicodechar{→}{\ensuremath{\to}}
+\newunicodechar{∀}{\ensuremath{\forall}}
+\newunicodechar{≠}{\ensuremath{\neq}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{¬}{\ensuremath{\neg}}
+\newunicodechar{Δ}{\ensuremath{\Delta}}
+\newunicodechar{ᶠ}{\ensuremath{{}^{f}}}
+\newunicodechar{𝓝}{\ensuremath{\mathcal{N}}}
+\newunicodechar{²}{\ensuremath{{}^2}}
+\newunicodechar{⟪}{\ensuremath{\langle\!\langle}}
+\newunicodechar{⟫}{\ensuremath{\rangle\!\rangle}}
+
+\DefineVerbatimEnvironment{lean}{Verbatim}{fontsize=\small,frame=leftline,framerule=0.6pt,
+  rulecolor=\color{gray!60},xleftmargin=1em}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{A Formal Proof of Earnshaw's Theorem in Lean~4}
+\author{Nichlas Löfdahl \and Claude (Anthropic)\thanks{AI system (model Claude Opus 5.5), developed by Anthropic.
+Claude designed the proof strategy, wrote the Lean proofs and drafted this manuscript in collaboration with
+the first author.}}
+\date{October 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\begin{abstract}
+Earnshaw's theorem states that no configuration of static charges can hold a charged particle in
+stable equilibrium. Mathematically, a harmonic function has no strict local minimum or maximum. We
+give a machine-checked proof in Lean~4 with Mathlib, for functions on an arbitrary
+finite-dimensional real inner product space of positive dimension that are harmonic in a
+neighbourhood of the point in question. Because Mathlib does not yet contain the mean-value
+property or the maximum principle for harmonic functions on $\mathbb{R}^n$, we use a short
+perturbation argument whose only analytic input is the second-order necessary condition for a
+local minimum, which we derive from Mathlib's one-variable second-derivative test. We also prove
+the weaker linear-stability statement: the Hessian of a function with vanishing Laplacian is never
+positive definite. The development is about 250 lines and uses no axioms beyond Lean's standard
+three.
+\end{abstract}
+
+\section{Introduction}
+
+In 1842 Samuel Earnshaw observed that a collection of point charges interacting through
+inverse-square forces cannot be in stable equilibrium~\cite{earnshaw1842}. In modern language: in
+a charge-free region the electrostatic potential $V$ satisfies Laplace's equation $\Delta V=0$, and
+a harmonic function has no strict local minimum. Hence the potential energy $qV$ of a test charge
+has no point of stable equilibrium, whatever the sign of $q$. The theorem explains why ion traps
+must use time-dependent fields (Paul traps) or magnetic fields (Penning traps), and why stable
+magnetic levitation of ordinary permanent magnets is impossible without diamagnetism or feedback.
+
+Lean's library Mathlib~\cite{mathlib2020} recently gained a definition of the Laplacian on
+finite-dimensional real inner product spaces and of harmonic functions
+(\texttt{InnerProductSpace.HarmonicAt}). To our knowledge, and after searching Mathlib, Physlib
+and the web, Earnshaw's theorem had not been formalized in Lean or in other major proof assistants.
+
+\paragraph{Contributions.}
+\begin{itemize}
+  \item A lemma identifying the second derivative of $t\mapsto g(z+tv)$ at $0$ with the Hessian
+  $D^2g(z)(v,v)$, and from it the second-order necessary condition at a local minimum
+  (\S\ref{sec:second}).
+  \item The Laplacian of $y\mapsto\|y-x\|^2$, equal to $2\dim E$ (\S\ref{sec:quadratic}).
+  \item Linear instability: if $\Delta f(x)=0$, the Hessian of $f$ at $x$ is not positive definite
+  (\S\ref{sec:linear}).
+  \item Earnshaw's theorem: a function harmonic near $x$ has neither a strict local minimum nor a
+  strict local maximum at $x$, together with the electrostatic corollary (\S\ref{sec:earnshaw}).
+\end{itemize}
+
+The source is in the \texttt{earnshaw} folder of
+\url{https://github.com/Crotalus/ai-formalized}. It builds with Lean~\texttt{v4.35.0} and
+Mathlib commit \texttt{56a0058}.
+
+\section{The argument}
+
+Throughout, $E$ is a finite-dimensional real inner product space with $\dim E=n\ge1$.
+
+\begin{theorem}[Earnshaw]\label{thm:earnshaw}
+Let $f\colon E\to\mathbb{R}$ be $C^2$ with $\Delta f=0$ on a neighbourhood of $x$. Then $x$ is
+not a strict local minimum of $f$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+Suppose $f(y)>f(x)$ for all $y\ne x$ near $x$. Choose $r>0$ such that $f$ is harmonic on the closed
+ball $\bar B=\bar B(x,r)$ and $f>f(x)$ on $\bar B\setminus\{x\}$. The sphere $S=\partial B(x,r)$
+is compact and non-empty, so $f$ attains a minimum $f(y_0)$ on $S$; put $\delta=f(y_0)-f(x)>0$.
+Let
+\[
+  g(y)=f(y)-\varepsilon\|y-x\|^2,\qquad \varepsilon=\frac{\delta}{2r^2}.
+\]
+Then $g(x)=f(x)$, while on $S$ we have $g\ge f(y_0)-\delta/2=f(x)+\delta/2$. Since $\bar B$ is
+compact, $g$ attains its minimum on $\bar B$ at some $z$, with $g(z)\le g(x)<\min_S g$, so $z$ lies
+in the open ball and is a local minimum of $g$. By the second-order necessary condition
+(Lemma~\ref{lem:soc}), $D^2g(z)(v,v)\ge0$ for all $v$, and summing over an orthonormal basis gives
+$\Delta g(z)\ge0$. But
+$\Delta g(z)=\Delta f(z)-\varepsilon\,\Delta\|\cdot-x\|^2(z)=0-2n\varepsilon<0$, a contradiction.
+\end{proof}
+
+The maximum version follows by applying the theorem to $-f$. This argument is a standard device in
+the theory of maximum principles (cf.\ the proof of the weak maximum principle for elliptic operators in~\cite{evans}). Its appeal for formalization
+is that it needs neither integration over spheres nor the mean-value property.
+
+\begin{remark}
+The hypothesis $\dim E\ge1$ is necessary: if $E=\{0\}$, then $x$ has no punctured neighbourhood,
+so ``strict local minimum'' holds vacuously. In Lean this appears as \texttt{[Nontrivial E]}.
+\end{remark}
+
+\section{Formalization}
+
+\subsection{Second derivatives along lines}\label{sec:second}
+
+Mathlib defines the Laplacian through the second iterated Fréchet derivative and proves
+\[
+  \Delta f(x)=\sum_i D^2f(x)(e_i,e_i)
+\]
+for any orthonormal basis $(e_i)$ (\texttt{laplacian\_eq\_iteratedFDeriv\_orthonormalBasis}). The
+missing ingredient is the link between $D^2g(z)(v,v)$ and one-variable calculus:
+
+\begin{lean}
+lemma deriv_deriv_comp_line {g : E → ℝ} {z : E} (hg : ContDiffAt ℝ 2 g z) (v : E) :
+    deriv (deriv fun t : ℝ => g (z + t • v)) 0 = iteratedFDeriv ℝ 2 g z ![v, v]
+\end{lean}
+
+The proof first shows that $\frac{d}{dt}g(z+tv)=Dg(z+tv)\,v$ for $t$ near $0$. This holds because
+$g$ is differentiable on a neighbourhood of $z$, which follows from \texttt{ContDiffAt.eventually}.
+It then differentiates once more, using that $Dg$ is differentiable at $z$
+(\texttt{ContDiffAt.fderiv\_right}) and the product rule for applying a continuous linear map.
+
+\begin{lemma}[Second-order necessary condition]\label{lem:soc}
+If $g$ is $C^2$ at $z$ and $z$ is a local minimum of $g$, then $D^2g(z)(v,v)\ge0$ for all $v$.
+\end{lemma}
+
+Mathlib has the \emph{sufficient} second-derivative test for functions $\mathbb{R}\to\mathbb{R}$
+(\texttt{isLocalMax\_of\_deriv\_deriv\_neg}), but not the necessary condition. We derive the latter
+with a small trick. Let $\varphi(t)=g(z+tv)$, which has a local minimum at $0$, so $\varphi'(0)=0$.
+If $\varphi''(0)<0$, the sufficient test makes $0$ also a local maximum. Then $\varphi$ is
+constant near $0$, so $\varphi'$ vanishes near $0$ and $\varphi''(0)=0$, a contradiction. In Lean
+this is about fifteen lines.
+
+\subsection{The squared distance}\label{sec:quadratic}
+
+\begin{lean}
+lemma laplacian_norm_sub_sq (x z : E) :
+    Δ (fun y => ‖y - x‖ ^ 2) z = 2 * Module.finrank ℝ E
+\end{lean}
+
+Rather than computing the Hessian of $y\mapsto\|y-x\|^2$ abstractly, we reuse
+\texttt{deriv\_deriv\_comp\_line}. Along a line,
+$\|z+tv-x\|^2=\|z-x\|^2+2t\langle z-x,v\rangle+t^2\|v\|^2$, a quadratic polynomial in $t$ with
+second derivative $2\|v\|^2$. Summing over an orthonormal basis gives $2n$.
+
+\subsection{Linear instability}\label{sec:linear}
+
+\begin{lean}
+lemma not_posDef_hessian_of_laplacian_eq_zero [Nontrivial E] {f : E → ℝ} {x : E}
+    (h : Δ f x = 0) : ¬ ∀ v ≠ 0, 0 < iteratedFDeriv ℝ 2 f x ![v, v]
+\end{lean}
+
+If the Hessian were positive definite, the Laplacian would be a non-empty sum of positive terms.
+This is the version of Earnshaw's theorem usually given in physics texts. It rules out equilibria
+that are stable to second order, but on its own it does not exclude a degenerate strict minimum.
+For example, $t\mapsto t^4$ has a strict minimum at $0$ with vanishing second derivative.
+
+\subsection{Earnshaw's theorem}\label{sec:earnshaw}
+
+\begin{lean}
+theorem HarmonicAt.not_isStrictLocalMin [Nontrivial E] {f : E → ℝ} {x : E}
+    (hf : HarmonicAt f x) : ¬ ∀ᶠ y in 𝓝[≠] x, f x < f y
+
+theorem HarmonicAt.not_isStrictLocalMax [Nontrivial E] {f : E → ℝ} {x : E}
+    (hf : HarmonicAt f x) : ¬ ∀ᶠ y in 𝓝[≠] x, f y < f x
+
+theorem earnshaw {V : EuclideanSpace ℝ (Fin 3) → ℝ} {x : EuclideanSpace ℝ (Fin 3)}
+    (hV : HarmonicAt V x) (q : ℝ) : ¬ ∀ᶠ y in 𝓝[≠] x, q * V x < q * V y
+\end{lean}
+
+Mathlib's \texttt{HarmonicAt f x} means that $f$ is $C^2$ at $x$ and $\Delta f=0$ on a
+neighbourhood of $x$. It is an open condition (\texttt{HarmonicAt.eventually}), which supplies the
+radius on which $f$ is harmonic. The formal proof follows the sketch above step by step. It
+extracts radii from the two neighbourhood filters, takes minima over the compact sphere and closed
+ball (\texttt{IsCompact.exists\_isMinOn}), shows that the minimiser of $g$ is not on the sphere,
+and closes with the linearity of the Laplacian (\texttt{ContDiffAt.laplacian\_sub},
+\texttt{laplacian\_smul}) and \texttt{nlinarith}. The main proof is 47 lines.
+
+The physical corollary covers both signs of the test charge at once, because
+\texttt{HarmonicAt} is preserved under scalar multiplication.
+
+\section{Discussion}
+
+\paragraph{Size and checking.} The development has 9 lemmas and theorems in about 250 lines,
+including documentation. It compiles without warnings, and \texttt{\#print axioms} on the main
+results reports only \texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}.
+
+\paragraph{What made it feasible.} Three pieces of Mathlib carried the weight: the Laplacian and
+its expression in an orthonormal basis, the notion of a harmonic function with its stability under
+negation and scaling, and the one-variable second-derivative test. The two lemmas we contribute,
+the Hessian along a line and the necessary condition at a minimum, are general facts that would
+fit naturally into Mathlib.
+
+\paragraph{Limitations and future work.} We do not prove the mean-value property or the strong
+maximum principle, which would yield stronger statements (for example, that a harmonic function
+with a non-strict local minimum is locally constant). The electrostatic corollary assumes that the
+potential is harmonic. Deriving this from Coulomb's law for a finite charge distribution away from
+the charges would connect the result to Physlib's electromagnetism library. Natural extensions are
+the magnetostatic version (Braunbek's theorem on diamagnetic levitation) and a dynamical
+statement: Lyapunov instability of the equilibrium for the Newtonian motion $m\ddot{\mathbf r}=-q\nabla V$.
+
+\paragraph{Author contributions.} N.L.\ chose the problem, directed the work and reviewed the
+results. Claude, an AI system developed by Anthropic, surveyed prior work, devised the
+perturbation strategy and the second-order-condition trick, wrote the Lean proofs and drafted the
+manuscript. All statements were checked by the Lean kernel. As an AI system cannot take
+responsibility for a publication, N.L.\ is accountable for its content.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

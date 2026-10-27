@@ -6,3 +6,4 @@
 **/paper/*.out
 **/paper/*.fls
 **/paper/*.fdb_latexmk
+.last_check.log

@@ -10,6 +10,7 @@ Physlib/Mathlib versions), the Lean sources, and a short paper.
 | Folder | Problem | Status |
 |---|---|---|
 | [`kepler-lrl/`](kepler-lrl/) | Kepler problem: conservation of the Laplace–Runge–Lenz vector and Kepler's first law | Complete, no `sorry` · [paper](kepler-lrl/paper/main.pdf) |
+| [`earnshaw/`](earnshaw/) | Earnshaw's theorem: harmonic functions have no strict local extrema (no stable electrostatic equilibrium) | Complete, no `sorry` · [paper](earnshaw/paper/main.pdf) |
 
 ## Building a problem
 
