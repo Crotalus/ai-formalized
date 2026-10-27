@@ -2,8 +2,7 @@
 
 AI-assisted, machine-checked solutions to mathematics and physics problems in Lean 4.
 
-Built with [Lean 4](https://lean-lang.org),
-built on [Physlib](https://github.com/leanprover-community/physlib) and Mathlib.
+Built on [Physlib](https://github.com/leanprover-community/physlib) and Mathlib.
 
 Each problem lives in its own folder: an independent Lake project (with its own pinned
 Physlib/Mathlib versions), the Lean sources, and a short paper.
@@ -27,7 +26,7 @@ and `paper/`, and add a row to the table above.
 
 ## Authors
 
-Nichlas Lofdahl and Claude (Anthropic).
+Nichlas Löfdahl and Claude (Anthropic).
 
 ## License
 

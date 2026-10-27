@@ -4,7 +4,7 @@ A machine-checked formalization of the classical Kepler problem in [Lean 4](http
 on top of [Physlib](https://github.com/leanprover-community/physlib) and Mathlib.
 
 **Paper:** [`paper/main.pdf`](paper/main.pdf) — *A Formal Proof of the Conservation of the
-Laplace–Runge–Lenz Vector and Kepler's First Law in Lean 4* (Nichlas Lofdahl, Claude).
+Laplace–Runge–Lenz Vector and Kepler's First Law in Lean 4* (Nichlas Löfdahl, Claude).
 
 ## Results (`KeplerLRL/Kepler.lean`)
 
