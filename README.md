@@ -1,6 +1,8 @@
-# Formalized physics in Lean 4
+# ai-formalized
 
-Machine-checked solutions to theoretical-physics problems in [Lean 4](https://lean-lang.org),
+AI-assisted, machine-checked solutions to mathematics and physics problems in Lean 4.
+
+Built with [Lean 4](https://lean-lang.org),
 built on [Physlib](https://github.com/leanprover-community/physlib) and Mathlib.
 
 Each problem lives in its own folder: an independent Lake project (with its own pinned
