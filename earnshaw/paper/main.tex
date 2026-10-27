@@ -50,8 +50,9 @@ Earnshaw's theorem states that no configuration of static charges can hold a cha
 stable equilibrium. Mathematically, a harmonic function has no strict local minimum or maximum. We
 give a machine-checked proof in Lean~4 with Mathlib, for functions on an arbitrary
 finite-dimensional real inner product space of positive dimension that are harmonic in a
-neighbourhood of the point in question. Because Mathlib does not yet contain the mean-value
-property or the maximum principle for harmonic functions on $\mathbb{R}^n$, we use a short
+neighbourhood of the point in question. Because Mathlib contains the mean-value property for
+harmonic functions only in the plane (via circle averages on $\mathbb{C}$), and neither it nor the
+maximum principle on $\mathbb{R}^n$ in general, we use a short
 perturbation argument whose only analytic input is the second-order necessary condition for a
 local minimum, which we derive from Mathlib's one-variable second-derivative test. We also prove
 the weaker linear-stability statement: the Hessian of a function with vanishing Laplacian is never

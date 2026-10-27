@@ -1,0 +1,237 @@
+% Compile with: latexmk -pdf main
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{newunicodechar}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+% Unicode characters appearing in Lean code
+\newunicodechar{‖}{\ensuremath{\|}}
+\newunicodechar{ℝ}{\ensuremath{\mathbb{R}}}
+\newunicodechar{ℚ}{\ensuremath{\mathbb{Q}}}
+\newunicodechar{→}{\ensuremath{\to}}
+\newunicodechar{∀}{\ensuremath{\forall}}
+\newunicodechar{∃}{\ensuremath{\exists}}
+\newunicodechar{∈}{\ensuremath{\in}}
+\newunicodechar{∧}{\ensuremath{\wedge}}
+\newunicodechar{∩}{\ensuremath{\cap}}
+\newunicodechar{≤}{\ensuremath{\leq}}
+\newunicodechar{β}{\ensuremath{\beta}}
+\newunicodechar{ε}{\ensuremath{\varepsilon}}
+\newunicodechar{θ}{\ensuremath{\theta}}
+\newunicodechar{π}{\ensuremath{\pi}}
+\newunicodechar{ρ}{\ensuremath{\rho}}
+\newunicodechar{Ω}{\ensuremath{\Omega}}
+\newunicodechar{ᶠ}{\ensuremath{{}^{f}}}
+\newunicodechar{𝓝}{\ensuremath{\mathcal{N}}}
+\newunicodechar{₀}{\ensuremath{{}_0}}
+\newunicodechar{√}{\ensuremath{\surd}}
+\newunicodechar{×}{\ensuremath{\times}}
+\newunicodechar{∫}{\ensuremath{\int}}
+
+\DefineVerbatimEnvironment{lean}{Verbatim}{fontsize=\small,frame=leftline,framerule=0.6pt,
+  rulecolor=\color{gray!60},xleftmargin=1em}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{Closed Near-Circular Orbits Force a Power Law:\\
+A Formal Proof of the First Half of Bertrand's Theorem in Lean~4}
+\author{Nichlas Löfdahl \and Claude (Anthropic)\thanks{AI system (model Claude Opus 5.5), developed by Anthropic.
+Claude designed the formalization, wrote the Lean proofs (in part via parallel sub-agents) and drafted this
+manuscript in collaboration with the first author.}}
+\date{October 2026}
+
+\begin{document}
+\sloppy
+\maketitle
+
+\begin{abstract}
+Bertrand's theorem (1873) states that the only central forces for which every bounded orbit is
+closed are the inverse-square law and Hooke's law. All standard proofs share a first step. If
+every orbit near each stable circular orbit is closed, then the near-circular apsidal angle
+$\pi/\sqrt{3+rV''/V'}$ must be a constant rational multiple of $\pi$, so the force is a power law
+$V'(r)=C\,r^{\beta^2-3}$ with $\beta\in\mathbb{Q}_{>0}$. We give a machine-checked proof of this
+step in Lean~4 with Mathlib, with the apsidal angle defined as an honest singular integral over
+the classically allowed region. The analytic core is a one-dimensional Morse lemma, proved via
+L'Hôpital's rule. A trigonometric substitution in Morse coordinates then
+turns the apsidal integral into a regular integral. Together they show that the apsidal angle is
+continuous in the energy up to the circular orbit, where it equals $\pi/\sqrt{U''}$. To our
+knowledge this is the first formalization of any part of Bertrand's theorem.
+\end{abstract}
+
+\section{Introduction}
+
+Among all central forces, why do only gravity and the ideal spring produce closed orbits? Bertrand's
+answer~\cite{bertrand1873} is a classic of mechanics, reproduced in Goldstein~\cite{goldstein} and
+Arnold~\cite{arnold}. Rigorous treatments are surprisingly delicate. Arnold's sketch hides
+nontrivial analysis in its limits. Féjoz and Kaczmarek~\cite{fejoz2004} give a careful local proof
+via Birkhoff invariants, and many elementary proofs have since appeared (e.g.~\cite{chin2015}).
+
+Most proofs proceed in two stages:
+\begin{enumerate}
+  \item[(I)] \emph{Near-circular orbits.} If all orbits close to stable circular orbits are
+  closed, the force is a power law $F\propto r^{\beta^2-3}$ with rational $\beta$.
+  \item[(II)] \emph{Power laws.} Among power laws, only $\beta=1$ (Kepler) and $\beta=2$ (harmonic
+  oscillator) have all bounded orbits closed.
+\end{enumerate}
+This paper formalizes stage (I) completely in Lean~4~\cite{mathlib2020}. Stage (II) and the link
+between closed trajectories and apsidal angles are left for future work
+(\S\ref{sec:discussion}). The development is part of the repository
+\url{https://github.com/Crotalus/ai-formalized} (folder \texttt{bertrand}). It builds with Lean
+\texttt{v4.35.0} and Mathlib commit \texttt{56a0058}.
+
+\section{Setting}
+
+A particle of unit mass moves in a central potential $V(r)$ with angular momentum $M>0$. In the
+variable $x=M/r$, Binet's equation states that the radial motion, parametrized by the polar angle
+$\theta$, is a one-dimensional oscillation $\tfrac12 x'(\theta)^2+U(x)=E$ in the effective potential
+\[
+  U(x)=\frac{x^2}{2}+V\!\left(\frac{M}{x}\right).
+\]
+The \emph{apsidal angle}, the angle from pericentre to apocentre, is the half-period of this
+oscillation:
+\[
+  \Phi(E)=\int_{\{U<E\}_{x_0}}\frac{dx}{\sqrt{2(E-U(x))}},
+\]
+where $\{U<E\}_{x_0}$ is the connected component, containing the bottom $x_0$ of the well, of the
+classically allowed region. An orbit closes after finitely many revolutions exactly when
+$\Phi/\pi\in\mathbb{Q}$. A circular orbit of radius $r$ has $M^2=r^3V'(r)$ and sits at the
+critical point $x_0=M/r$ of $U$, with
+\begin{equation}\label{eq:Upp}
+  U''(x_0)=3+\frac{rV''(r)}{V'(r)} ,
+\end{equation}
+and it is stable when this is positive. In Lean:
+
+\begin{lean}
+def apsidalAngle (U : ℝ → ℝ) (Ω : Set ℝ) (x₀ E : ℝ) : ℝ :=
+  ∫ x in connectedComponentIn (Ω ∩ {x | U x < E}) x₀, 1 / √(2 * (E - U x))
+
+def effPot (V : ℝ → ℝ) (M x : ℝ) : ℝ := x ^ 2 / 2 + V (M / x)
+def angMom (V : ℝ → ℝ) (r : ℝ) : ℝ := √(r ^ 3 * deriv V r)
+\end{lean}
+
+The integrand is unbounded at the turning points, so $\Phi$ is a genuinely singular (Lebesgue)
+integral. We do not regularize it in the definition.
+
+\section{Main theorem}
+
+\begin{theorem}[Bertrand, part I]\label{thm:main}
+Let $0<a<b$ and let $V$ be $C^3$ on $(a,b)$ with $V'>0$ and $3V'+rV''>0$ there (every circular
+orbit of radius in $(a,b)$ exists and is stable). Suppose that for every $r\in(a,b)$, every orbit
+with the angular momentum of the circular orbit of radius $r$ and energy slightly above it is closed,
+that is, $\Phi(E)\in\pi\mathbb{Q}$. Then there is a rational $\beta>0$ with $3+rV''/V'=\beta^2$ on
+$(a,b)$, and $V'(r)=C\,r^{\beta^2-3}$ for some $C>0$.
+\end{theorem}
+
+\begin{lean}
+theorem forceLaw_of_closed_nearCircular {V : ℝ → ℝ} {a b : ℝ} (ha : 0 < a) (hab : a < b)
+    (hV : ContDiffOn ℝ 3 V (Ioo a b))
+    (hpos : ∀ r ∈ Ioo a b, 0 < deriv V r)
+    (hstab : ∀ r ∈ Ioo a b, 0 < 3 * deriv V r + r * iteratedDeriv 2 V r)
+    (hclosed : ∀ r ∈ Ioo a b, ∀ᶠ E in 𝓝[>] (circularEnergy V r),
+      ∃ q : ℚ, orbitApsidalAngle V a b r E = q * π) :
+    ∃ β : ℚ, 0 < β ∧ (∃ C > 0, ∀ r ∈ Ioo a b, deriv V r = C * r ^ ((β : ℝ) ^ 2 - 3)) ∧
+      ∀ r ∈ Ioo a b, 3 + r * iteratedDeriv 2 V r / deriv V r = (β : ℝ) ^ 2
+\end{lean}
+
+The orbit's allowed region is taken inside the radii $(a,b)$, i.e.\ $\Omega=(M/b,M/a)$ in the
+$x$ variable.
+
+\paragraph{Proof outline.} Fix $r$ and the well $U$ of its circular orbit.
+\begin{enumerate}
+  \item \emph{Morse chart} (\S\ref{sec:morse}). There is a $C^1$ map $X$ with $X(0)=x_0$, $X'>0$
+  and $U(X(s))=U(x_0)+s^2/2$ near $0$, with $X'(0)=1/\sqrt{U''(x_0)}$.
+  \item \emph{Regularization} (\S\ref{sec:chart}). For $0<\varepsilon$ small,
+  $\Phi(U(x_0)+\varepsilon)=\int_{-\pi/2}^{\pi/2}X'(\sqrt{2\varepsilon}\sin\theta)\,d\theta=:F(\varepsilon)$.
+  The function $F$ is continuous on $[0,\rho^2/2)$, with $F(0)=\pi X'(0)=\pi/\sqrt{U''(x_0)}$.
+  \item \emph{Rationality.} By hypothesis $F(\varepsilon)/\pi\in\mathbb{Q}$ for small
+  $\varepsilon>0$. A continuous rational-valued function on an interval is constant, since
+  otherwise its image would contain an irrational number. So $F$ is constant near $0^+$, and by
+  continuity $F(0)\in\pi\mathbb{Q}$. Hence $\sqrt{U''(x_0)}\in\mathbb{Q}$.
+  \item \emph{Power law.} By \eqref{eq:Upp}, $r\mapsto\sqrt{3+rV''/V'}$ is continuous on $(a,b)$
+  and rational-valued, hence a constant $\beta$. Then $rV''=(\beta^2-3)V'$, so
+  $(V'(r)\,r^{3-\beta^2})'=0$ and $V'=C\,r^{\beta^2-3}$.
+\end{enumerate}
+
+Step 3 is where continuity of $\Phi$ \emph{in the energy} is indispensable. A function with values
+in $\pi\mathbb{Q}$ can perfectly well have an irrational limit. This is why the near-circular
+formula $\Phi\to\pi/\sqrt{U''}$, which textbooks derive by linearization, does not by itself
+prove the step.
+
+\section{The one-dimensional Morse lemma}\label{sec:morse}
+
+\begin{lean}
+theorem exists_morseChart {U : ℝ → ℝ} {Ω : Set ℝ} {x₀ : ℝ} (hΩ : IsOpen Ω) (hx₀ : x₀ ∈ Ω)
+    (hU : ContDiffOn ℝ 3 U Ω) (h1 : deriv U x₀ = 0) (h2 : 0 < iteratedDeriv 2 U x₀) :
+    ∃ c : MorseChart U Ω x₀, deriv c.X 0 = 1 / √(iteratedDeriv 2 U x₀)
+\end{lean}
+
+The usual proof writes $U(x)-U(x_0)=(x-x_0)^2g(x)$ with
+$g(x)=\int_0^1(1-t)U''(x_0+t(x-x_0))\,dt$, and needs differentiation under the integral sign. The
+formal proof avoids this. It sets $q(x)=(U(x)-U(x_0))/(x-x_0)^2$ and
+$s(x)=(x-x_0)\sqrt{2q(x)}$, and uses Mathlib's L'Hôpital rule (\texttt{lhopital\_zero\_nhdsNE}) to
+get $q(x)\to U''(x_0)/2$. Hence $s'(x_0)=\sqrt{U''(x_0)}$. Away from $x_0$, differentiating
+$s^2=2(U-U(x_0))$ gives $s'=U'/s$, which tends to $\sqrt{U''(x_0)}$ as well. So $s$ is $C^1$ with
+positive derivative near $x_0$, and the local inverse given by Mathlib's inverse function theorem
+(\texttt{HasStrictFDerivAt.toOpenPartialHomeomorph}) is the chart $X$.
+
+\section{The apsidal angle in a Morse chart}\label{sec:chart}
+
+\begin{lean}
+theorem MorseChart.apsidalAngle_eq (c : MorseChart U Ω x₀) {ε : ℝ} (hε : 0 < ε)
+    (hερ : ε < c.ρ ^ 2 / 2) :
+    apsidalAngle U Ω x₀ (U x₀ + ε) =
+      ∫ θ in -(π / 2)..π / 2, deriv c.X (√(2 * ε) * sin θ)
+\end{lean}
+
+Let $\sigma=\sqrt{2\varepsilon}$. First, the allowed component equals $X((-\sigma,\sigma))$. This
+image is connected, lies in $\{U<E\}$ and contains $x_0$. Conversely, the component is an interval
+around $x_0$ that cannot contain the turning points $X(\pm\sigma)$, where $U=E$. Second, the map
+$\theta\mapsto X(\sigma\sin\theta)$ is a $C^1$ bijection from $(-\pi/2,\pi/2)$ onto that
+component. On it $2(E-U)=\sigma^2\cos^2\theta$, so the Jacobian $X'(\sigma\sin\theta)\sigma\cos\theta$
+cancels the singularity exactly. The change of variables uses Mathlib's Lebesgue version
+\texttt{integral\_image\_eq\_integral\_abs\_deriv\_smul}, which requires neither continuity nor
+integrability of the singular integrand. Continuity of
+$F(\varepsilon)=\int X'(\sqrt{2\varepsilon}\sin\theta)\,d\theta$ on $[0,\rho^2/2)$ follows from
+continuity of parametric integrals with jointly continuous integrand.
+
+\section{Discussion}\label{sec:discussion}
+
+\paragraph{Size and checking.} The development consists of five files, about 750 lines in all. It
+has no \texttt{sorry}, and \texttt{\#print axioms} on the main theorem reports only
+\texttt{propext}, \texttt{Classical.choice} and \texttt{Quot.sound}. The proof was developed in
+parallel. We first fixed a small shared interface: the definition of \texttt{apsidalAngle} and a
+\texttt{MorseChart} structure. Separate agents then proved the Morse lemma and the chart
+computation against it, while the physics layer and the assembly were written in parallel.
+
+\paragraph{Stage II.} With $V'=Cr^{\beta^2-3}$ on all of $(0,\infty)$ and all bounded orbits
+closed, the same continuity-plus-rationality argument, applied over the connected range of bound
+energies, shows that $\Phi(E)=\pi/\beta$ for every bound energy. Comparing with the limit
+$E\to\infty$ for $\beta^2>2$ (where $\Phi\to\pi/2$) and $E\to0^-$ for $\beta^2<2$ (where
+$\Phi\to\pi/\beta^2$) leaves $\beta=2$ and $\beta=1$. Formalizing this needs a global Morse chart
+for a single-well potential and two asymptotic evaluations of the apsidal integral. The
+regularized integral of \S\ref{sec:chart} is designed to make both tractable.
+
+\paragraph{Trajectories.} We take as given that an orbit closes exactly when
+$\Phi\in\pi\mathbb{Q}$. Deriving this from Newton's equations (Binet's equation and periodicity of
+the radial motion) would connect the result to Physlib's central-force library.
+
+\paragraph{Author contributions.} N.L.\ chose the problem, directed the work and reviewed the
+results. Claude, an AI system developed by Anthropic, designed the formal statements and proof
+architecture, wrote the Lean proofs (delegating the Morse lemma and the chart computation to
+sub-agents) and drafted the manuscript. All statements were checked by the Lean kernel. As an AI
+system cannot take responsibility for a publication, N.L.\ is accountable for its content.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

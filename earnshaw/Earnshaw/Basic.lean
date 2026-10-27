@@ -23,8 +23,8 @@ function which is harmonic near `x` (`C²` with `Δ f = 0` on a neighbourhood). 
 * `f` has no strict local minimum and no strict local maximum at `x` (Earnshaw's theorem).
 
 The second statement does not follow from the first: a strict minimum may have a degenerate
-Hessian. Since Mathlib does not yet provide the mean-value property or maximum principle for
-harmonic functions on `ℝⁿ`, the proof is a perturbation argument. If `x` were a strict local
+Hessian. Since Mathlib provides the mean-value property only for harmonic functions on `ℂ`,
+and no maximum principle on `ℝⁿ`, the proof is a perturbation argument. If `x` were a strict local
 minimum, then `f ≥ f x + δ` on a small sphere around `x`, and `g = f - ε ‖· - x‖²` with
 `ε = δ / (2 r²)` would attain its minimum over the closed ball at an interior point `z`. There the
 second-order necessary condition forces `Δ g z ≥ 0`, but `Δ g z = -2 ε dim E < 0`.
